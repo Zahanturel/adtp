@@ -1,0 +1,41 @@
+# ADTP daemon configuration. Every field may be overridden by an environment
+# variable, e.g. ADTP_SERVER_PORT, ADTP_STORE_BACKEND, ADTP_STORE_POSTGRES.
+
+server:
+  host: 127.0.0.1          # localhost only by default; run behind an authenticating gateway for production
+  port: 8080
+  api_keys: []             # bearer keys for mutating endpoints; a random one is generated on first run if empty
+                           # (also settable via ADTP_SERVER_API_KEYS=key1,key2)
+
+store:
+  backend: memory          # "memory" or "postgres"
+  postgres: ""             # e.g. postgres://user:pass@localhost:5432/adtp
+
+identity:
+  platform_did: ""         # derived from the key file when empty
+  platform_key: platform.key  # auto-generated on first run if absent
+
+verify:
+  max_chain_depth: 10
+  clock_skew_seconds: 60
+  # Risk tier governs revocation-staleness handling. HIGH fails CLOSED when the
+  # revocation source is unavailable (denies); MEDIUM/LOW/ANALYTICS degrade-accept
+  # (fail open) on lookup errors. Default HIGH so revocation is fail-closed.
+  default_risk_tier: HIGH
+
+auth:
+  mode: api_key            # "api_key" (default) or "oidc"
+  # When mode is "oidc", bearer tokens are validated against the IdP below and the
+  # token's `sub` claim becomes the sponsor identity at agent registration.
+  oidc:
+    issuer: ""             # e.g. https://login.microsoftonline.com/{tenant}/v2.0
+    audience: ""           # e.g. api://adtp
+    jwks_url: ""           # e.g. https://login.microsoftonline.com/{tenant}/discovery/v2.0/keys
+
+integrations:
+  # Batched audit-event export to a SIEM/log sink. Empty url disables it.
+  siem_webhook:
+    url: ""                # e.g. https://http-intake.logs.datadoghq.com/api/v2/logs
+    headers: {}            # e.g. {DD-API-KEY: "${DATADOG_API_KEY}"} — ${VAR} is resolved from the environment
+    batch_size: 100
+    flush_interval: 10s

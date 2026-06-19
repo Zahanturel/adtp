@@ -1,0 +1,42 @@
+# Binaries
+/adtpd
+/adtpd.exe
+*.exe
+*.out
+*.test
+
+# Generated key material — never commit secrets
+*.key
+*.pem
+*.p12
+*.pfx
+instance.id
+api.key
+
+# Build artifacts
+/dist/
+/build/
+
+# Test & coverage
+*.cov
+coverage.out
+*.coverprofile
+
+# Go workspace
+go.work
+go.work.sum
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment / secrets
+.env
+.env.*
+*.local

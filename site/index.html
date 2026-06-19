@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ADTP &mdash; Identity infrastructure for AI agents</title>
+  <meta name="description" content="ADTP is the Agent Delegation and Trust Protocol: open-source cryptographic identity and trust infrastructure for AI agents. Govern all agents across platforms and organizations with cryptographic proof.">
+  <meta name="theme-color" content="#0a0a0a">
+  <meta name="color-scheme" content="dark">
+  <link rel="canonical" href="https://zahanturel.github.io/adtp/">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="ADTP &mdash; Identity infrastructure for AI agents">
+  <meta property="og:description" content="Cryptographic delegation chains. Provably-complete revocation. Cross-organizational trust. Open protocol.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://zahanturel.github.io/adtp/">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- ===== Nav ===== -->
+  <header class="nav">
+    <div class="container nav-inner">
+      <a class="brand" href="#top" aria-label="ADTP home">
+        <svg viewBox="0 0 32 32" aria-hidden="true">
+          <path d="M16 2 L28 7 V15 C28 23 22 28 16 30 C10 28 4 23 4 15 V7 Z" fill="#00d4aa"/>
+          <path d="M11 16 L15 20 L22 12" fill="none" stroke="#0a0a0a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        ADTP
+      </a>
+      <nav class="nav-links">
+        <a href="#what" class="hide-sm">Protocol</a>
+        <a href="#how" class="hide-sm">How it works</a>
+        <a href="#start">Get started</a>
+        <a href="https://github.com/Zahanturel/adtp" class="nav-cta">GitHub &nearr;</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="top">
+
+    <!-- ===== Hero ===== -->
+    <section class="hero">
+      <div class="container">
+        <p class="eyebrow">Agent Delegation and Trust Protocol</p>
+        <h1>Identity infrastructure for AI agents</h1>
+        <p class="lede">Cryptographic delegation chains. Provably-complete revocation. Cross-organizational trust. Open protocol.</p>
+        <div class="cta">
+          <a class="btn btn-primary" href="https://github.com/Zahanturel/adtp">View on GitHub</a>
+          <a class="btn btn-ghost" href="https://github.com/Zahanturel/adtp/blob/main/docs/AITP_v03_CONSOLIDATED.md">Read the Spec</a>
+        </div>
+        <p class="positioning">
+          Microsoft Agent 365 governs Microsoft agents. Google governs Google agents.
+          <strong>ADTP governs all agents</strong> &mdash; across platforms, across organizations,
+          with cryptographic proof. Open protocol. No vendor lock-in.
+        </p>
+      </div>
+    </section>
+
+    <!-- ===== Problem ===== -->
+    <section id="problem" class="section">
+      <div class="container">
+        <p class="eyebrow">The problem</p>
+        <h2>Everyone is piloting agents. Almost no one ships them.</h2>
+        <div class="stats">
+          <div class="stat">
+            <div class="stat-num">85%</div>
+            <div class="stat-cap">of enterprises have AI agent pilots</div>
+          </div>
+          <div class="stat">
+            <div class="stat-num">5%</div>
+            <div class="stat-cap">make it to production</div>
+          </div>
+          <div class="stat">
+            <div class="stat-num">$1M+<span>/yr</span></div>
+            <div class="stat-cap">spent on agent identity incidents</div>
+          </div>
+        </div>
+        <p class="problem-note">
+          The #1 blocker is <strong>identity governance</strong>. Agents share human credentials.
+          Nobody traces delegation chains. When something goes wrong, there is no cryptographic
+          record of who authorized what.
+        </p>
+      </div>
+    </section>
+
+    <!-- ===== What ADTP does ===== -->
+    <section id="what" class="section">
+      <div class="container">
+        <p class="eyebrow">What ADTP does</p>
+        <h2>Cryptographic trust for every agent, every hop.</h2>
+        <div class="cards">
+          <div class="card">
+            <div class="card-idx">01</div>
+            <h3>Verifiable Agent Identity</h3>
+            <p>Every agent gets a cryptographic identity (<code>did:key</code>). No shared credentials. No service accounts.</p>
+          </div>
+          <div class="card">
+            <div class="card-idx">02</div>
+            <h3>Delegation Chains</h3>
+            <p>When Agent A delegates to Agent B which calls Agent C, every hop is cryptographically signed and traceable to a human sponsor.</p>
+          </div>
+          <div class="card">
+            <div class="card-idx">03</div>
+            <h3>Provably-Complete Revocation</h3>
+            <p>Compromise one credential, cascade to every descendant. A registration invariant guarantees completeness.</p>
+            <span class="tag">Patent pending</span>
+          </div>
+          <div class="card">
+            <div class="card-idx">04</div>
+            <h3>Cross-Org Trust</h3>
+            <p>Organization A's agents can securely interact with Organization B's agents. Non-transitive, depth-bounded, bilateral agreements.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== How it works ===== -->
+    <section id="how" class="section">
+      <div class="container">
+        <p class="eyebrow">How it works</p>
+        <h2>Register, delegate, verify, revoke.</h2>
+        <div class="flow">
+          <div class="flow-step">
+            <div class="flow-title">Register Agent</div>
+            <span class="flow-sub">did:key</span>
+          </div>
+          <span class="flow-arrow" aria-hidden="true">&rarr;</span>
+          <div class="flow-step">
+            <div class="flow-title">Issue Credential</div>
+            <span class="flow-sub">UCAN JWT</span>
+          </div>
+          <span class="flow-arrow" aria-hidden="true">&rarr;</span>
+          <div class="flow-step">
+            <div class="flow-title">Delegate</div>
+            <span class="flow-sub">RESTRICT</span>
+          </div>
+          <span class="flow-arrow" aria-hidden="true">&rarr;</span>
+          <div class="flow-step">
+            <div class="flow-title">Verify</div>
+            <span class="flow-sub">13 steps</span>
+          </div>
+          <span class="flow-arrow" aria-hidden="true">&rarr;</span>
+          <div class="flow-step">
+            <div class="flow-title">Revoke</div>
+            <span class="flow-sub">Cascade</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== Integration ===== -->
+    <section id="integration" class="section">
+      <div class="container">
+        <p class="eyebrow">Integration</p>
+        <h2>Drops into the stack you already run.</h2>
+        <div class="integrations">
+          <div class="integration">
+            <div class="label">Identity</div>
+            <p>Works with your existing identity provider &mdash; <strong>Entra, Okta, Auth0</strong> via OIDC.</p>
+          </div>
+          <div class="integration">
+            <div class="label">Audit / SIEM</div>
+            <p>Exports audit events to your SIEM &mdash; <strong>Datadog, Splunk, Elastic</strong> via webhook.</p>
+          </div>
+          <div class="integration">
+            <div class="label">Platforms</div>
+            <p>Integrates with <strong>MCP, A2A, LangGraph, CrewAI</strong> &mdash; any agent platform.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== Technical highlights ===== -->
+    <section id="tech" class="section">
+      <div class="container">
+        <p class="eyebrow">Technical highlights</p>
+        <h2>Built like infrastructure.</h2>
+        <div class="tech-grid">
+          <div class="tech-item">
+            <span class="mark">&rsaquo;</span>
+            <p>Go daemon, single static binary. <span>One process, no runtime dependencies.</span></p>
+          </div>
+          <div class="tech-item">
+            <span class="mark">&rsaquo;</span>
+            <p><code>Ed25519</code> signatures, with a post-quantum migration path to <code>ML-DSA-65</code>.</p>
+          </div>
+          <div class="tech-item">
+            <span class="mark">&rsaquo;</span>
+            <p><code>RESTRICT</code> mode: structural escalation prevention. <span>No semantic comparison in the TCB.</span></p>
+          </div>
+          <div class="tech-item">
+            <span class="mark">&rsaquo;</span>
+            <p><code>Apache 2.0</code> open source. <span>No vendor lock-in.</span></p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== Get started ===== -->
+    <section id="start" class="section">
+      <div class="container">
+        <p class="eyebrow">Get started</p>
+        <h2>From clone to a registered agent.</h2>
+        <div class="codewrap">
+          <div class="codebar">
+            <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+            <span class="name">bash</span>
+          </div>
+<pre class="code"><code><span class="tok-c"># Clone</span>
+git clone https://github.com/Zahanturel/adtp.git
+
+<span class="tok-c"># Build</span>
+cd adtp &amp;&amp; make build
+
+<span class="tok-c"># Run</span>
+./adtpd --config config.yaml
+<span class="tok-c"># &rarr; "adtpd listening on 127.0.0.1:8080"</span>
+
+<span class="tok-c"># Register an agent</span>
+curl -H <span class="tok-a">"Authorization: Bearer &lt;your-api-key&gt;"</span> \
+  -X POST localhost:8080/v1/agents \
+  -d <span class="tok-a">'{"sponsor_did":"did:key:z6Mk..."}'</span></code></pre>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ===== Footer ===== -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-top">
+        <div>
+          <div class="brand-line">
+            <svg viewBox="0 0 32 32" aria-hidden="true">
+              <path d="M16 2 L28 7 V15 C28 23 22 28 16 30 C10 28 4 23 4 15 V7 Z" fill="#00d4aa"/>
+              <path d="M11 16 L15 20 L22 12" fill="none" stroke="#0a0a0a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            ADTP
+          </div>
+          <div class="tagline">Agent Delegation and Trust Protocol</div>
+        </div>
+        <nav class="footer-links">
+          <a href="https://github.com/Zahanturel/adtp">GitHub</a>
+          <a href="https://github.com/Zahanturel/adtp/blob/main/docs/AITP_v03_CONSOLIDATED.md">Spec</a>
+          <a href="https://www.apache.org/licenses/LICENSE-2.0">License</a>
+        </nav>
+      </div>
+      <div class="footer-bottom">
+        <span>Patent pending (India). Open source (Apache 2.0).</span>
+        <span class="mono">Built by Zahan Turel</span>
+      </div>
+    </div>
+  </footer>
+
+</body>
+</html>
