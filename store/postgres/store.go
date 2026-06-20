@@ -158,7 +158,7 @@ func (s *PostgresStore) Register(ctx context.Context, credentialCID string, chai
 	if err != nil {
 		return fmt.Errorf("adtp/store/postgres: begin: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	for _, c := range chainCIDs {
 		if _, err := tx.Exec(ctx,
 			`INSERT INTO registration_index (credential_cid, chain_cid)
@@ -201,7 +201,7 @@ func (s *PostgresStore) Revoke(ctx context.Context, e revocation.RevocationEntry
 	if err != nil {
 		return fmt.Errorf("adtp/store/postgres: begin: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	// Serialize concurrent revocations for the same subject so the MAX(seq)+1 read
 	// and the insert are atomic (the UNIQUE constraint is the backstop). The lock

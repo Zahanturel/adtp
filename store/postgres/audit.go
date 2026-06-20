@@ -34,7 +34,7 @@ func (l *postgresAuditLog) Append(entry audit.AuditEntry) error {
 	if err != nil {
 		return fmt.Errorf("adtp/store/postgres: audit begin: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, auditChainLockKey); err != nil {
 		return fmt.Errorf("adtp/store/postgres: audit lock: %w", err)
