@@ -1,31 +1,6 @@
-# ADTP v0.3 — Complete Protocol Specification (v1.0-RC1)
+# ADTP v0.3 — Complete Protocol Specification
 ## Agent Delegation and Trust Protocol
 ### Supersedes v0.2 in full. Structural revision: restriction-mode attenuation, transparency log, sessions, budgeted delegation, revocation authority model, first-use registration, canonical signing discipline.
-
----
-
-## 0. Changes from v0.2
-
-| # | Change | Fixes |
-|---|--------|-------|
-| 0.1 | RESTRICT attenuation mode (monotone caveat blocks) | capability_leq dependence; att_seal P2 over-claim |
-| 0.2 | att_seal rescoped to serialization-differential defense (RESTATE only) | False "P2 SOUND independent of capability_leq" claim |
-| 0.3 | Canonical signing discipline (typ-tagged, domain-separated JCS) | Ambiguous concatenated signing inputs |
-| 0.4 | ADTP Transparency Log (ATL), witness-cosigned | Truncatable audit chain; non-enumerable credential universe; Bloom FP/poisoning |
-| 0.5 | First-use registration with signed registration timestamps | Offline-issuance vs atomic-audit contradiction; cascade completeness gap |
-| 0.6 | Revocation authority model, REINSTATED status, sequence semantics | Missing revocation authorization; no suspension recovery |
-| 0.7 | Invocation-time constraint semantics; budget caveats; receipts; pre-splitting | Per-call vs cumulative ambiguity; missing metered authority |
-| 0.8 | ADTP-Session (data plane) | No high-frequency path; revocation-latency coupling |
-| 0.9 | URI canonicalization profile | URI_COVERS bypass class |
-| 0.10 | Lifetime profile; exp mandatory | Unbounded credentials |
-| 0.11 | Channel binding REQUIRED by tier; stdio ephemeral-DID binding; distributed nonce rules | Proof-of-possession gaps |
-| 0.12 | Org root key pinning; rotation ceremony; trust bundles; jurisdiction tags | did:web SPOF; O(n^2) trust distribution |
-| 0.13 | /.well-known/aitp metadata | Interop discovery |
-| 0.14 | Sponsor as first-class principal with controls | Accountability without mechanism |
-| 0.15 | Privacy Considerations; Delegation Gateway pattern; pairwise DIDs | Absent privacy analysis |
-| 0.16 | PQ migration engineering (hybrid composites, size handling, alg policy) | One-line PQ plan |
-| 0.17 | att_seal documented as defensive disclosure | Biscuit prior art |
-| 0.18 | Error oracle minimization; synchronous audit enqueue at HIGH; spec tightening throughout | — |
 
 ---
 
