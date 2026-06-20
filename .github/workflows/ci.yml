@@ -14,7 +14,6 @@ jobs:
         with:
           name: coverage
           path: coverage.out
-
   lint:
     runs-on: ubuntu-latest
     steps:
@@ -22,6 +21,5 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.26'
-      - uses: golangci/golangci-lint-action@v7
-        with:
-          version: latest
+      - run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+      - run: golangci-lint run ./...
