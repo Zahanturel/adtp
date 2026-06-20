@@ -1,7 +1,7 @@
 # ADTP — Agent Delegation and Trust Protocol
 
 > Cryptographic identity, delegation chains, and provably-complete revocation for AI agents.
-> Single binary. Apache 2.0. Built by [Zerith](https://zerith.sh).
+> Single binary. Apache 2.0. Built by [Zahan Turel](https://zahanturel.github.io/adtp/).
 
 ---
 
@@ -17,7 +17,7 @@ When something goes wrong — and it will — there is no cryptographic record o
 - **UCAN credential issuance** — every delegation is cryptographically signed
 - **RESTRICT mode** — structural escalation prevention; no descendant can exceed ancestor permissions
 - **13-step chain verification** — from structural validity to cross-org policy evaluation
-- **Provably-complete cascade revocation** — a registration invariant guarantees every descendant is revoked *(patent pending)*
+- **Provably-complete cascade revocation** — a registration invariant guarantees every descendant is revoked
 - **Cross-org bilateral trust** — non-transitive, depth-bounded agreements between organizations
 
 ## Quickstart
@@ -27,8 +27,9 @@ git clone https://github.com/Zahanturel/adtp.git
 cd adtp && make build
 ./adtpd --config config.yaml
 # → adtpd listening on 127.0.0.1:8080
+# → generated API key: abc123...  ← copy this
 
-# Register an agent
+# Register an agent (use the API key printed above)
 curl -H "Authorization: Bearer <api-key>" \
   -X POST localhost:8080/v1/agents \
   -d '{"sponsor_did":"did:key:z6Mk..."}'
@@ -45,7 +46,7 @@ curl -H "Authorization: Bearer <api-key>" \
 ## Technical highlights
 
 - Go daemon, single static binary. No runtime dependencies.
-- Ed25519 signatures, post-quantum migration path to ML-DSA-65.
+- Ed25519 signatures, with a planned post-quantum migration path (ML-DSA-65).
 - RESTRICT mode: structural escalation prevention. No semantic comparison in the TCB.
 - Thirteen-step credential chain verification.
 - Apache 2.0 open source.
@@ -53,17 +54,24 @@ curl -H "Authorization: Bearer <api-key>" \
 ## Status
 
 - [x] Go daemon (12,600+ lines)
-- [x] India provisional patent filed (June 2026)
-- [x] US provisional in progress
 - [ ] Python client SDK
 - [ ] TypeScript client SDK
 - [ ] Hosted option
 
 ## Links
 
-- [Zerith](https://zerith.sh) — project home
-- [Landing page](https://zahanturel.github.io/adtp/)
+- [Landing page](https://zahanturel.github.io/adtp/) — project home
+- [Protocol spec](docs/PROTOCOL.md)
+
+## Building on Windows
+
+The Makefile requires a Unix-compatible shell. Use Git Bash, WSL, or MSYS2. Alternatively, run the Go commands directly:
+
+```powershell
+go build -o adtpd.exe ./cmd/adtpd
+go test ./...
+```
 
 ## License
 
-[Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0)
+[Apache 2.0](LICENSE)

@@ -1,6 +1,7 @@
 package revocation
 
 import (
+	"context"
 	"errors"
 	"testing"
 )
@@ -8,19 +9,19 @@ import (
 func TestCacheRevokeAndGetStatus(t *testing.T) {
 	key, did := genKey(t)
 	c := NewMemoryRevocationCache()
-	if got, _ := c.GetStatus("bafkreione"); got != nil {
+	if got, _ := c.GetStatus(context.Background(), "bafkreione"); got != nil {
 		t.Errorf("unknown subject status = %+v, want nil", got)
 	}
 
-	if err := c.Revoke(signedEntry(t, key, did, RevocationSubject{CID: "bafkreione"}, StatusRevoked, 1)); err != nil {
+	if err := c.Revoke(context.Background(), signedEntry(t, key, did, RevocationSubject{CID: "bafkreione"}, StatusRevoked, 1)); err != nil {
 		t.Fatalf("Revoke: %v", err)
 	}
-	got, _ := c.GetStatus("bafkreione")
+	got, _ := c.GetStatus(context.Background(), "bafkreione")
 	if got == nil || got.Status != StatusRevoked {
 		t.Errorf("status = %+v, want REVOKED", got)
 	}
-	if c.CurrentSeq("bafkreione") != 1 {
-		t.Errorf("CurrentSeq = %d, want 1", c.CurrentSeq("bafkreione"))
+	if seq, _ := c.CurrentSeq(context.Background(), "bafkreione"); seq != 1 {
+		t.Errorf("CurrentSeq = %d, want 1", seq)
 	}
 }
 
@@ -28,7 +29,7 @@ func TestCacheRevokeAndGetStatus(t *testing.T) {
 // well-formed but unsigned entry (no resolvable authority) is rejected.
 func TestCacheRevokeRejectsUnsigned(t *testing.T) {
 	c := NewMemoryRevocationCache()
-	err := c.Revoke(RevocationEntry{Subject: RevocationSubject{CID: "bafkreione"}, Status: StatusRevoked, Seq: 1})
+	err := c.Revoke(context.Background(), RevocationEntry{Subject: RevocationSubject{CID: "bafkreione"}, Status: StatusRevoked, Seq: 1})
 	if err == nil {
 		t.Fatal("Revoke(unsigned) = nil, want rejection")
 	}
@@ -47,7 +48,7 @@ func TestCacheRevokeRejectsForgedSignature(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateRevocationEntry: %v", err)
 	}
-	if err := c.Revoke(*forged); err == nil {
+	if err := c.Revoke(context.Background(), *forged); err == nil {
 		t.Fatal("Revoke(forged) = nil, want rejection")
 	}
 }
@@ -55,18 +56,18 @@ func TestCacheRevokeRejectsForgedSignature(t *testing.T) {
 func TestCacheSequenceRollback(t *testing.T) {
 	key, did := genKey(t)
 	c := NewMemoryRevocationCache()
-	if err := c.Revoke(signedEntry(t, key, did, RevocationSubject{CID: "c"}, StatusSuspended, 5)); err != nil {
+	if err := c.Revoke(context.Background(), signedEntry(t, key, did, RevocationSubject{CID: "c"}, StatusSuspended, 5)); err != nil {
 		t.Fatalf("Revoke seq 5: %v", err)
 	}
 	// A lower or equal sequence for the same subject is rejected.
-	if err := c.Revoke(signedEntry(t, key, did, RevocationSubject{CID: "c"}, StatusReinstated, 5)); !errors.Is(err, ErrSequenceRollback) {
+	if err := c.Revoke(context.Background(), signedEntry(t, key, did, RevocationSubject{CID: "c"}, StatusReinstated, 5)); !errors.Is(err, ErrSequenceRollback) {
 		t.Errorf("equal seq err = %v, want ErrSequenceRollback", err)
 	}
-	if err := c.Revoke(signedEntry(t, key, did, RevocationSubject{CID: "c"}, StatusRevoked, 4)); !errors.Is(err, ErrSequenceRollback) {
+	if err := c.Revoke(context.Background(), signedEntry(t, key, did, RevocationSubject{CID: "c"}, StatusRevoked, 4)); !errors.Is(err, ErrSequenceRollback) {
 		t.Errorf("lower seq err = %v, want ErrSequenceRollback", err)
 	}
 	// A higher sequence supersedes.
-	if err := c.Revoke(signedEntry(t, key, did, RevocationSubject{CID: "c"}, StatusRevoked, 6)); err != nil {
+	if err := c.Revoke(context.Background(), signedEntry(t, key, did, RevocationSubject{CID: "c"}, StatusRevoked, 6)); err != nil {
 		t.Errorf("higher seq err = %v, want nil", err)
 	}
 }
@@ -74,9 +75,9 @@ func TestCacheSequenceRollback(t *testing.T) {
 func TestCacheReinstatedIsActive(t *testing.T) {
 	key, did := genKey(t)
 	c := NewMemoryRevocationCache()
-	_ = c.Revoke(signedEntry(t, key, did, RevocationSubject{CID: "c"}, StatusSuspended, 1))
-	_ = c.Revoke(signedEntry(t, key, did, RevocationSubject{CID: "c"}, StatusReinstated, 2))
-	if got, _ := c.GetStatus("c"); got != nil {
+	_ = c.Revoke(context.Background(), signedEntry(t, key, did, RevocationSubject{CID: "c"}, StatusSuspended, 1))
+	_ = c.Revoke(context.Background(), signedEntry(t, key, did, RevocationSubject{CID: "c"}, StatusReinstated, 2))
+	if got, _ := c.GetStatus(context.Background(), "c"); got != nil {
 		t.Errorf("reinstated subject status = %+v, want nil (active)", got)
 	}
 }
@@ -85,7 +86,7 @@ func TestCacheMissingSubject(t *testing.T) {
 	c := NewMemoryRevocationCache()
 	// Subject check precedes the signature check, so a subject-less entry reports
 	// ErrMissingSubject regardless of signing.
-	if err := c.Revoke(RevocationEntry{Status: StatusRevoked, Seq: 1}); !errors.Is(err, ErrMissingSubject) {
+	if err := c.Revoke(context.Background(), RevocationEntry{Status: StatusRevoked, Seq: 1}); !errors.Is(err, ErrMissingSubject) {
 		t.Errorf("err = %v, want ErrMissingSubject", err)
 	}
 }
@@ -98,7 +99,7 @@ func TestCacheUpdateFromList(t *testing.T) {
 	if err := c.UpdateFromList(list1, pubOf(key)); err != nil {
 		t.Fatalf("UpdateFromList seq 1: %v", err)
 	}
-	if got, _ := c.GetStatus("bafkreione"); got == nil {
+	if got, _ := c.GetStatus(context.Background(), "bafkreione"); got == nil {
 		t.Errorf("entry from list not applied")
 	}
 
@@ -128,7 +129,7 @@ func TestCacheUpdateFromListRejectsForged(t *testing.T) {
 	if err := c.UpdateFromList(forged, pubOf(key)); err == nil {
 		t.Fatal("UpdateFromList(forged) = nil, want rejection")
 	}
-	if got, _ := c.GetStatus("bafkreione"); got != nil {
+	if got, _ := c.GetStatus(context.Background(), "bafkreione"); got != nil {
 		t.Errorf("forged list must not apply any entry, got %+v", got)
 	}
 }

@@ -13,7 +13,7 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/adtp/adtp/config"
+	"github.com/Zahanturel/adtp/config"
 )
 
 func freePort(t *testing.T) int {
@@ -251,7 +251,7 @@ func TestPersistInstanceBadPathDoesNotPanic(t *testing.T) {
 func TestServeListenError(t *testing.T) {
 	// An invalid port makes ListenAndServe fail; serve must surface the error.
 	srv := &http.Server{Addr: "127.0.0.1:999999", Handler: http.NewServeMux()}
-	if err := serve(context.Background(), srv, testLogger()); err == nil {
+	if err := serve(context.Background(), srv, config.Default(), testLogger()); err == nil {
 		t.Errorf("serve(bad addr) = nil, want listen error")
 	}
 }
@@ -260,7 +260,7 @@ func TestServeGracefulShutdown(t *testing.T) {
 	srv := &http.Server{Addr: "127.0.0.1:0", Handler: http.NewServeMux()}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // request shutdown immediately
-	if err := serve(ctx, srv, testLogger()); err != nil {
+	if err := serve(ctx, srv, config.Default(), testLogger()); err != nil {
 		t.Errorf("serve(canceled) = %v, want nil after graceful shutdown", err)
 	}
 }

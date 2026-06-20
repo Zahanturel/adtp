@@ -103,13 +103,13 @@ func CanTransition(from, to AgentState) bool {
 func Transition(agent *Agent, toState AgentState, byDID, reason string) error {
 	allowed, known := validTransitions[agent.State]
 	if !known {
-		return fmt.Errorf("aitp/lifecycle: %w: unknown state %q", ErrInvalidTransition, agent.State)
+		return fmt.Errorf("adtp/lifecycle: %w: unknown state %q", ErrInvalidTransition, agent.State)
 	}
 	if len(allowed) == 0 {
-		return fmt.Errorf("aitp/lifecycle: %w: %s admits no transitions", ErrTerminalState, agent.State)
+		return fmt.Errorf("adtp/lifecycle: %w: %s admits no transitions", ErrTerminalState, agent.State)
 	}
 	if _, ok := allowed[toState]; !ok {
-		return fmt.Errorf("aitp/lifecycle: %w: %s -> %s", ErrInvalidTransition, agent.State, toState)
+		return fmt.Errorf("adtp/lifecycle: %w: %s -> %s", ErrInvalidTransition, agent.State, toState)
 	}
 
 	now := time.Now().Unix()

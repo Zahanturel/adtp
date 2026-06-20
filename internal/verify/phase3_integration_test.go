@@ -1,17 +1,18 @@
 package verify_test
 
 import (
+	"context"
 	"crypto/ed25519"
 	"testing"
 	"time"
 
-	"github.com/adtp/adtp/internal/audit"
-	"github.com/adtp/adtp/internal/credential"
-	"github.com/adtp/adtp/internal/identity"
-	"github.com/adtp/adtp/internal/lifecycle"
-	"github.com/adtp/adtp/internal/revocation"
-	"github.com/adtp/adtp/internal/verify"
-	"github.com/adtp/adtp/store/memory"
+	"github.com/Zahanturel/adtp/internal/audit"
+	"github.com/Zahanturel/adtp/internal/credential"
+	"github.com/Zahanturel/adtp/internal/identity"
+	"github.com/Zahanturel/adtp/internal/lifecycle"
+	"github.com/Zahanturel/adtp/internal/revocation"
+	"github.com/Zahanturel/adtp/internal/verify"
+	"github.com/Zahanturel/adtp/store/memory"
 )
 
 func key(t *testing.T) (ed25519.PrivateKey, string) {
@@ -42,7 +43,8 @@ func TestPhase3FullLifecycle(t *testing.T) {
 	if err := lifecycle.Transition(agent, lifecycle.StateActive, platformDID, "credential issued"); err != nil {
 		t.Fatalf("activate agent: %v", err)
 	}
-	if err := st.PutAgent(agent); err != nil {
+	ctx := context.Background()
+	if err := st.PutAgent(ctx, agent); err != nil {
 		t.Fatalf("PutAgent: %v", err)
 	}
 	mustAudit(t, auditLog, audit.AuditEntry{EventType: audit.EventAgentRegistered, AgentID: agentDID})
@@ -59,8 +61,8 @@ func TestPhase3FullLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateUCAN: %v", err)
 	}
-	rootCID, _ := st.PutCredential([]byte(rootToken))
-	st.Register(rootCID, []string{rootCID})
+	rootCID, _ := st.PutCredential(ctx, []byte(rootToken))
+	st.Register(ctx, rootCID, []string{rootCID})
 
 	// 3. Delegate twice in RESTRICT mode.
 	caveats := credential.Constraints{credential.NewTimeWindow(now-100, now+3600)}
@@ -70,8 +72,8 @@ func TestPhase3FullLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("mid delegation: %v", err)
 	}
-	midCID, _ := st.PutCredential(midRaw)
-	st.Register(midCID, []string{midCID, rootCID})
+	midCID, _ := st.PutCredential(ctx, midRaw)
+	st.Register(ctx, midCID, []string{midCID, rootCID})
 	mustAudit(t, auditLog, audit.AuditEntry{EventType: audit.EventDelegationIssued, AgentID: subDID, CredCID: midCID})
 
 	_, leafRaw, err := credential.CreateRestrictBlock(
@@ -80,8 +82,8 @@ func TestPhase3FullLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("leaf delegation: %v", err)
 	}
-	leafCID, _ := st.PutCredential(leafRaw)
-	st.Register(leafCID, []string{leafCID, midCID, rootCID})
+	leafCID, _ := st.PutCredential(ctx, leafRaw)
+	st.Register(ctx, leafCID, []string{leafCID, midCID, rootCID})
 	mustAudit(t, auditLog, audit.AuditEntry{EventType: audit.EventDelegationIssued, AgentID: leafDID, CredCID: leafCID})
 
 	config := &verify.VerifierConfig{
@@ -99,12 +101,12 @@ func TestPhase3FullLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateInvocation: %v", err)
 	}
-	if res := verify.Verify(nil, inv1, config); !res.OK {
+	if res := verify.Verify(ctx, nil, inv1, config); !res.OK {
 		t.Fatalf("initial verification failed: %v", res.Error)
 	}
 
 	// 5 + 6. Compromise the middle credential and cascade to its descendants.
-	report, err := revocation.ExecuteCascade(midCID, st, st, nil, auditLog, platformKey)
+	report, err := revocation.ExecuteCascade(ctx, midCID, st, st, nil, auditLog, platformKey)
 	if err != nil {
 		t.Fatalf("ExecuteCascade: %v", err)
 	}
@@ -117,7 +119,7 @@ func TestPhase3FullLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateInvocation: %v", err)
 	}
-	res2 := verify.Verify(nil, inv2, config)
+	res2 := verify.Verify(ctx, nil, inv2, config)
 	if res2.OK {
 		t.Fatal("leaf verified after compromise cascade")
 	}
@@ -129,7 +131,7 @@ func TestPhase3FullLifecycle(t *testing.T) {
 	}
 
 	// 8. Reconciliation reports no repairs — the cascade was complete.
-	rec, err := revocation.Reconcile(st, st, auditLog)
+	rec, err := revocation.Reconcile(ctx, st, st, auditLog)
 	if err != nil {
 		t.Fatalf("Reconcile: %v", err)
 	}

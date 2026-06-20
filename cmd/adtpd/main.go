@@ -19,14 +19,14 @@ import (
 	"syscall"
 	"time"
 
-	v1 "github.com/adtp/adtp/api/v1"
-	"github.com/adtp/adtp/config"
-	"github.com/adtp/adtp/internal/identity"
-	"github.com/adtp/adtp/internal/siem"
-	"github.com/adtp/adtp/internal/verify"
-	"github.com/adtp/adtp/store"
-	"github.com/adtp/adtp/store/memory"
-	"github.com/adtp/adtp/store/postgres"
+	v1 "github.com/Zahanturel/adtp/api/v1"
+	"github.com/Zahanturel/adtp/config"
+	"github.com/Zahanturel/adtp/internal/identity"
+	"github.com/Zahanturel/adtp/internal/siem"
+	"github.com/Zahanturel/adtp/internal/verify"
+	"github.com/Zahanturel/adtp/store"
+	"github.com/Zahanturel/adtp/store/memory"
+	"github.com/Zahanturel/adtp/store/postgres"
 )
 
 func main() {
@@ -72,8 +72,8 @@ func runServer(ctx context.Context, cfg *config.Config, logger *slog.Logger) err
 		WriteTimeout:      30 * time.Second,
 	}
 
-	logger.Info("adtpd listening", "addr", cfg.Addr(), "backend", cfg.Store.Backend, "platform_did", svc.PlatformDID)
-	return serve(ctx, srv, logger)
+	logger.Info("adtpd listening", "addr", cfg.Addr(), "tls", cfg.TLSEnabled(), "backend", cfg.Store.Backend, "platform_did", svc.PlatformDID)
+	return serve(ctx, srv, cfg, logger)
 }
 
 // newService assembles the daemon's Service: storage backend, platform identity,
@@ -153,10 +153,16 @@ func newSIEMExporter(cfg *config.Config, logger *slog.Logger) (*siem.Exporter, e
 
 // serve runs srv until ctx is canceled, then gracefully shuts it down. A listen
 // failure is returned immediately.
-func serve(ctx context.Context, srv *http.Server, logger *slog.Logger) error {
+func serve(ctx context.Context, srv *http.Server, cfg *config.Config, logger *slog.Logger) error {
 	serveErr := make(chan error, 1)
 	go func() {
-		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		var err error
+		if cfg.TLSEnabled() {
+			err = srv.ListenAndServeTLS(cfg.Server.TLSCert, cfg.Server.TLSKey)
+		} else {
+			err = srv.ListenAndServe()
+		}
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
 			serveErr <- err
 		}
 	}()
@@ -246,8 +252,7 @@ func loadOrCreateAPIKeys(cfg *config.Config, logger *slog.Logger) (map[string]bo
 	if err := os.WriteFile(path, []byte(k), 0o600); err != nil {
 		return nil, fmt.Errorf("write api key %s: %w", path, err)
 	}
-	logger.Warn("generated a random API key (no keys configured); store it securely", "path", path)
-	fmt.Println("adtpd: generated API key (Authorization: Bearer <key>):", k)
+	logger.Warn("generated a random API key (no keys configured); read it from the file and store it securely", "path", path)
 	keys[k] = true
 	return keys, nil
 }

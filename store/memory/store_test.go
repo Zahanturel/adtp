@@ -1,13 +1,14 @@
 package memory
 
 import (
+	"context"
 	"crypto/ed25519"
 	"errors"
 	"testing"
 
-	"github.com/adtp/adtp/internal/identity"
-	"github.com/adtp/adtp/internal/lifecycle"
-	"github.com/adtp/adtp/internal/revocation"
+	"github.com/Zahanturel/adtp/internal/identity"
+	"github.com/Zahanturel/adtp/internal/lifecycle"
+	"github.com/Zahanturel/adtp/internal/revocation"
 )
 
 func revocationKey(t *testing.T) (ed25519.PrivateKey, string, error) {
@@ -18,18 +19,19 @@ func revocationKey(t *testing.T) (ed25519.PrivateKey, string, error) {
 
 func TestAgents(t *testing.T) {
 	s := New()
-	if _, err := s.GetAgent("did:key:zMissing"); !errors.Is(err, ErrAgentNotFound) {
+	ctx := context.Background()
+	if _, err := s.GetAgent(ctx, "did:key:zMissing"); !errors.Is(err, ErrAgentNotFound) {
 		t.Errorf("GetAgent(missing) = %v, want ErrAgentNotFound", err)
 	}
-	if err := s.PutAgent(&lifecycle.Agent{}); !errors.Is(err, ErrInvalidAgent) {
+	if err := s.PutAgent(ctx, &lifecycle.Agent{}); !errors.Is(err, ErrInvalidAgent) {
 		t.Errorf("PutAgent(no DID) = %v, want ErrInvalidAgent", err)
 	}
 
 	agent := lifecycle.NewAgent("did:key:zAgent", "did:key:zSponsor")
-	if err := s.PutAgent(agent); err != nil {
+	if err := s.PutAgent(ctx, agent); err != nil {
 		t.Fatalf("PutAgent: %v", err)
 	}
-	got, err := s.GetAgent("did:key:zAgent")
+	got, err := s.GetAgent(ctx, "did:key:zAgent")
 	if err != nil {
 		t.Fatalf("GetAgent: %v", err)
 	}
@@ -40,15 +42,16 @@ func TestAgents(t *testing.T) {
 
 func TestCredentials(t *testing.T) {
 	s := New()
-	if _, err := s.Get("bafkreimissing"); !errors.Is(err, ErrCredentialNotFound) {
+	ctx := context.Background()
+	if _, err := s.Get(ctx, "bafkreimissing"); !errors.Is(err, ErrCredentialNotFound) {
 		t.Errorf("Get(missing) = %v, want ErrCredentialNotFound", err)
 	}
 
-	cid, err := s.PutCredential([]byte("credential-bytes"))
+	cid, err := s.PutCredential(ctx, []byte("credential-bytes"))
 	if err != nil {
 		t.Fatalf("PutCredential: %v", err)
 	}
-	got, err := s.Get(cid)
+	got, err := s.Get(ctx, cid)
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
@@ -56,8 +59,8 @@ func TestCredentials(t *testing.T) {
 		t.Errorf("Get = %q", got)
 	}
 	// Idempotent re-put does not duplicate the order entry.
-	s.PutCredential([]byte("credential-bytes"))
-	list, _ := s.ListCredentials()
+	s.PutCredential(ctx, []byte("credential-bytes"))
+	list, _ := s.ListCredentials(ctx)
 	if len(list) != 1 || list[0] != cid {
 		t.Errorf("ListCredentials = %v", list)
 	}
@@ -65,17 +68,18 @@ func TestCredentials(t *testing.T) {
 
 func TestRegistrationIndex(t *testing.T) {
 	s := New()
-	s.Register("leaf", []string{"leaf", "mid", "root"})
-	s.Register("mid", []string{"mid", "root"})
+	ctx := context.Background()
+	s.Register(ctx, "leaf", []string{"leaf", "mid", "root"})
+	s.Register(ctx, "mid", []string{"mid", "root"})
 
-	desc, _ := s.FindDescendants("mid")
+	desc, _ := s.FindDescendants(ctx, "mid")
 	if len(desc) != 1 || desc[0] != "leaf" {
 		t.Errorf("FindDescendants(mid) = %v, want [leaf]", desc)
 	}
-	if !s.Contains("leaf", "root") {
+	if !s.Contains(ctx, "leaf", "root") {
 		t.Errorf("Contains(leaf, root) = false, want true")
 	}
-	if s.Contains("root", "leaf") {
+	if s.Contains(ctx, "root", "leaf") {
 		t.Errorf("Contains(root, leaf) = true, want false")
 	}
 }
@@ -86,7 +90,8 @@ func TestRevocation(t *testing.T) {
 		t.Fatalf("key: %v", err)
 	}
 	s := New()
-	if got, _ := s.GetStatus("c"); got != nil {
+	ctx := context.Background()
+	if got, _ := s.GetStatus(ctx, "c"); got != nil {
 		t.Errorf("GetStatus(active) = %+v, want nil", got)
 	}
 	entry, err := revocation.CreateRevocationEntry(
@@ -95,15 +100,15 @@ func TestRevocation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("entry: %v", err)
 	}
-	if err := s.Revoke(*entry); err != nil {
+	if err := s.Revoke(ctx, *entry); err != nil {
 		t.Fatalf("Revoke: %v", err)
 	}
-	got, _ := s.GetStatus("c")
+	got, _ := s.GetStatus(ctx, "c")
 	if got == nil || got.Status != revocation.StatusRevoked {
 		t.Errorf("GetStatus = %+v, want REVOKED", got)
 	}
-	if s.CurrentSeq("c") != 1 {
-		t.Errorf("CurrentSeq = %d, want 1", s.CurrentSeq("c"))
+	if seq, _ := s.CurrentSeq(ctx, "c"); seq != 1 {
+		t.Errorf("CurrentSeq = %d, want 1", seq)
 	}
 }
 
@@ -126,7 +131,7 @@ func TestUpdateFromListAndAudit(t *testing.T) {
 	if err := s.UpdateFromList(list, key.Public().(ed25519.PublicKey)); err != nil {
 		t.Fatalf("UpdateFromList: %v", err)
 	}
-	if got, _ := s.GetStatus("c"); got == nil {
+	if got, _ := s.GetStatus(context.Background(), "c"); got == nil {
 		t.Errorf("entry from list not applied")
 	}
 	if s.Audit() == nil {

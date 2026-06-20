@@ -62,6 +62,13 @@ const (
 type ServerConfig struct {
 	Host string `yaml:"host"`
 	Port int    `yaml:"port"`
+	// TLSCert and TLSKey, when both set, enable TLS on the listener.
+	TLSCert string `yaml:"tls_cert"`
+	TLSKey  string `yaml:"tls_key"`
+	// RateLimitRPS is the sustained request rate (per second). 0 disables.
+	RateLimitRPS float64 `yaml:"rate_limit_rps"`
+	// RateLimitBurst is the token-bucket burst size (defaults to RateLimitRPS).
+	RateLimitBurst int `yaml:"rate_limit_burst"`
 	// APIKeys are the accepted bearer keys for api_key auth. When empty, the
 	// daemon auto-generates one on first run (see cmd/adtpd).
 	APIKeys []string `yaml:"api_keys"`
@@ -91,8 +98,10 @@ var (
 	ErrInvalidPort    = errors.New("invalid server port")
 	ErrInvalidBackend = errors.New("invalid store backend")
 	ErrMissingDSN     = errors.New("postgres backend requires a connection string")
-	ErrInvalidAuthMode = errors.New("invalid auth mode")
-	ErrIncompleteOIDC  = errors.New("oidc auth requires issuer, audience, and jwks_url")
+	ErrInvalidAuthMode  = errors.New("invalid auth mode")
+	ErrIncompleteOIDC   = errors.New("oidc auth requires issuer, audience, and jwks_url")
+	ErrInvalidRiskTier  = errors.New("invalid risk tier (must be HIGH, MEDIUM, LOW, or ANALYTICS)")
+	ErrIncompleteTLS    = errors.New("tls_cert and tls_key must both be set")
 )
 
 // Default returns the built-in defaults.
@@ -124,12 +133,12 @@ func Load(path string) (*Config, error) {
 		switch {
 		case err == nil:
 			if err := yaml.Unmarshal(data, cfg); err != nil {
-				return nil, fmt.Errorf("aitp/config: parse %s: %w", path, err)
+				return nil, fmt.Errorf("adtp/config: parse %s: %w", path, err)
 			}
 		case errors.Is(err, os.ErrNotExist):
 			// Fall through to defaults + environment.
 		default:
-			return nil, fmt.Errorf("aitp/config: read %s: %w", path, err)
+			return nil, fmt.Errorf("adtp/config: read %s: %w", path, err)
 		}
 	}
 
@@ -149,7 +158,7 @@ func applyEnv(cfg *Config) error {
 	if v := os.Getenv("ADTP_SERVER_PORT"); v != "" {
 		n, err := strconv.Atoi(v)
 		if err != nil {
-			return fmt.Errorf("aitp/config: %w: ADTP_SERVER_PORT=%q", ErrInvalidPort, v)
+			return fmt.Errorf("adtp/config: %w: ADTP_SERVER_PORT=%q", ErrInvalidPort, v)
 		}
 		cfg.Server.Port = n
 	}
@@ -160,6 +169,12 @@ func applyEnv(cfg *Config) error {
 				cfg.Server.APIKeys = append(cfg.Server.APIKeys, k)
 			}
 		}
+	}
+	if v := os.Getenv("ADTP_SERVER_TLS_CERT"); v != "" {
+		cfg.Server.TLSCert = v
+	}
+	if v := os.Getenv("ADTP_SERVER_TLS_KEY"); v != "" {
+		cfg.Server.TLSKey = v
 	}
 	if v := os.Getenv("ADTP_STORE_BACKEND"); v != "" {
 		cfg.Store.Backend = v
@@ -176,14 +191,14 @@ func applyEnv(cfg *Config) error {
 	if v := os.Getenv("ADTP_VERIFY_MAX_CHAIN_DEPTH"); v != "" {
 		n, err := strconv.Atoi(v)
 		if err != nil {
-			return fmt.Errorf("aitp/config: ADTP_VERIFY_MAX_CHAIN_DEPTH=%q: %w", v, err)
+			return fmt.Errorf("adtp/config: ADTP_VERIFY_MAX_CHAIN_DEPTH=%q: %w", v, err)
 		}
 		cfg.Verify.MaxChainDepth = n
 	}
 	if v := os.Getenv("ADTP_VERIFY_CLOCK_SKEW_SECONDS"); v != "" {
 		n, err := strconv.ParseInt(v, 10, 64)
 		if err != nil {
-			return fmt.Errorf("aitp/config: ADTP_VERIFY_CLOCK_SKEW_SECONDS=%q: %w", v, err)
+			return fmt.Errorf("adtp/config: ADTP_VERIFY_CLOCK_SKEW_SECONDS=%q: %w", v, err)
 		}
 		cfg.Verify.ClockSkewSeconds = n
 	}
@@ -195,16 +210,19 @@ func applyEnv(cfg *Config) error {
 
 func (c *Config) validate() error {
 	if c.Server.Port <= 0 || c.Server.Port > 65535 {
-		return fmt.Errorf("aitp/config: %w: %d", ErrInvalidPort, c.Server.Port)
+		return fmt.Errorf("adtp/config: %w: %d", ErrInvalidPort, c.Server.Port)
+	}
+	if (c.Server.TLSCert == "") != (c.Server.TLSKey == "") {
+		return fmt.Errorf("adtp/config: %w", ErrIncompleteTLS)
 	}
 	switch c.Store.Backend {
 	case "memory":
 	case "postgres":
 		if c.Store.Postgres == "" {
-			return fmt.Errorf("aitp/config: %w", ErrMissingDSN)
+			return fmt.Errorf("adtp/config: %w", ErrMissingDSN)
 		}
 	default:
-		return fmt.Errorf("aitp/config: %w: %q", ErrInvalidBackend, c.Store.Backend)
+		return fmt.Errorf("adtp/config: %w: %q", ErrInvalidBackend, c.Store.Backend)
 	}
 	if c.Verify.MaxChainDepth <= 0 {
 		c.Verify.MaxChainDepth = 10
@@ -215,6 +233,11 @@ func (c *Config) validate() error {
 	if c.Verify.DefaultRiskTier == "" {
 		c.Verify.DefaultRiskTier = "HIGH"
 	}
+	switch c.Verify.DefaultRiskTier {
+	case "HIGH", "MEDIUM", "LOW", "ANALYTICS":
+	default:
+		return fmt.Errorf("adtp/config: %w: %q", ErrInvalidRiskTier, c.Verify.DefaultRiskTier)
+	}
 	if c.Auth.Mode == "" {
 		c.Auth.Mode = AuthModeAPIKey
 	}
@@ -222,10 +245,10 @@ func (c *Config) validate() error {
 	case AuthModeAPIKey:
 	case AuthModeOIDC:
 		if c.Auth.OIDC.Issuer == "" || c.Auth.OIDC.Audience == "" || c.Auth.OIDC.JWKSURL == "" {
-			return fmt.Errorf("aitp/config: %w", ErrIncompleteOIDC)
+			return fmt.Errorf("adtp/config: %w", ErrIncompleteOIDC)
 		}
 	default:
-		return fmt.Errorf("aitp/config: %w: %q", ErrInvalidAuthMode, c.Auth.Mode)
+		return fmt.Errorf("adtp/config: %w: %q", ErrInvalidAuthMode, c.Auth.Mode)
 	}
 	return nil
 }
@@ -233,4 +256,9 @@ func (c *Config) validate() error {
 // Addr returns the host:port listen address.
 func (c *Config) Addr() string {
 	return fmt.Sprintf("%s:%d", c.Server.Host, c.Server.Port)
+}
+
+// TLSEnabled reports whether TLS is configured.
+func (c *Config) TLSEnabled() bool {
+	return c.Server.TLSCert != "" && c.Server.TLSKey != ""
 }

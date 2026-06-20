@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/adtp/adtp/internal/signing"
+	"github.com/Zahanturel/adtp/internal/signing"
 )
 
 func sampleEntries(t *testing.T, key ed25519.PrivateKey, did string) []RevocationEntry {
@@ -71,7 +71,7 @@ func TestVerifyRevocationListRejects(t *testing.T) {
 	})
 	t.Run("wrong typ", func(t *testing.T) {
 		bad := *list
-		bad.Typ = "aitp/wrong/1"
+		bad.Typ = "adtp/wrong/1"
 		if err := VerifyRevocationList(&bad, key.Public().(ed25519.PublicKey)); !errors.Is(err, ErrNotRevocationList) {
 			t.Errorf("err = %v, want ErrNotRevocationList", err)
 		}

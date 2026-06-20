@@ -6,7 +6,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/adtp/adtp/internal/identity"
+	"github.com/Zahanturel/adtp/internal/identity"
 )
 
 func agentKeyDID(t *testing.T) (ed25519.PrivateKey, string) {
@@ -162,10 +162,10 @@ func TestParseRestrictBlockMalformed(t *testing.T) {
 		raw  string
 	}{
 		{"not json", "not-json"},
-		{"wrong typ", `{"typ":"aitp/ucan/1","iss":"a","aud":"b","prf":"c","sig":"d"}`},
-		{"missing iss", `{"typ":"aitp/cav/1","aud":"b","prf":"c","sig":"d"}`},
-		{"missing sig", `{"typ":"aitp/cav/1","iss":"a","aud":"b","prf":"c"}`},
-		{"duplicate key", `{"typ":"aitp/cav/1","typ":"x","iss":"a","aud":"b","prf":"c","sig":"d"}`},
+		{"wrong typ", `{"typ":"adtp/ucan/1","iss":"a","aud":"b","prf":"c","sig":"d"}`},
+		{"missing iss", `{"typ":"adtp/cav/1","aud":"b","prf":"c","sig":"d"}`},
+		{"missing sig", `{"typ":"adtp/cav/1","iss":"a","aud":"b","prf":"c"}`},
+		{"duplicate key", `{"typ":"adtp/cav/1","typ":"x","iss":"a","aud":"b","prf":"c","sig":"d"}`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

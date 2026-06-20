@@ -6,7 +6,7 @@ package adtp
 import (
 	"encoding/json"
 
-	"github.com/adtp/adtp/internal/credential"
+	"github.com/Zahanturel/adtp/internal/credential"
 )
 
 // Capability is a granted ability, re-exported from the credential package so

@@ -3,7 +3,7 @@ package adtp
 import (
 	"testing"
 
-	"github.com/adtp/adtp/internal/verify"
+	"github.com/Zahanturel/adtp/internal/verify"
 )
 
 func TestExternalCode(t *testing.T) {

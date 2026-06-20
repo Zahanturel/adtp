@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/adtp/adtp/internal/credential"
+	"github.com/Zahanturel/adtp/internal/credential"
 )
 
 // Issuance errors.
@@ -22,7 +22,7 @@ var (
 func ParentFromUCAN(u *credential.UCAN, cid string) (credential.DelegationParent, error) {
 	depth, ok := delegableDepth(u)
 	if !ok {
-		return credential.DelegationParent{}, fmt.Errorf("aitp/delegation: %w: no agent/delegate capability with delegation_depth", ErrCannotDelegate)
+		return credential.DelegationParent{}, fmt.Errorf("adtp/delegation: %w: no agent/delegate capability with delegation_depth", ErrCannotDelegate)
 	}
 	return credential.DelegationParent{
 		CID: cid,
@@ -65,7 +65,7 @@ func delegableDepth(u *credential.UCAN) (int, bool) {
 // depth-left.
 func DelegateRestrict(parent credential.DelegationParent, audDID string, caveats credential.Constraints, depth int, signerKey ed25519.PrivateKey, store *MemoryProofStore) (*credential.RestrictBlock, string, error) {
 	if parent.DL <= 0 {
-		return nil, "", fmt.Errorf("aitp/delegation: %w: parent depth-left %d", ErrDepthExhausted, parent.DL)
+		return nil, "", fmt.Errorf("adtp/delegation: %w: parent depth-left %d", ErrDepthExhausted, parent.DL)
 	}
 	block, raw, err := credential.CreateRestrictBlock(parent, audDID, depth, caveats, signerKey)
 	if err != nil {
@@ -79,7 +79,7 @@ func DelegateRestrict(parent credential.DelegationParent, audDID string, caveats
 // the child hop with its att_seal, stores it, and returns the token and its CID.
 func DelegateRestate(parent *credential.UCAN, audDID string, attSubset []credential.Capability, signerKey ed25519.PrivateKey, store *MemoryProofStore) (string, string, error) {
 	if !credential.CapabilitiesSubset(attSubset, parent.Payload.Att) {
-		return "", "", fmt.Errorf("aitp/delegation: %w", ErrEscalation)
+		return "", "", fmt.Errorf("adtp/delegation: %w", ErrEscalation)
 	}
 	token, err := credential.CreateRestateHop(parent, audDID, attSubset, signerKey)
 	if err != nil {

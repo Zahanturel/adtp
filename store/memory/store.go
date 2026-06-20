@@ -5,30 +5,31 @@
 package memory
 
 import (
+	"context"
 	"crypto/ed25519"
 	"errors"
 	"fmt"
 	"sync"
 
-	"github.com/adtp/adtp/internal/audit"
-	"github.com/adtp/adtp/internal/credential"
-	"github.com/adtp/adtp/internal/delegation"
-	"github.com/adtp/adtp/internal/lifecycle"
-	"github.com/adtp/adtp/internal/revocation"
-	"github.com/adtp/adtp/store"
+	"github.com/Zahanturel/adtp/internal/audit"
+	"github.com/Zahanturel/adtp/internal/credential"
+	"github.com/Zahanturel/adtp/internal/delegation"
+	"github.com/Zahanturel/adtp/internal/lifecycle"
+	"github.com/Zahanturel/adtp/internal/revocation"
+	"github.com/Zahanturel/adtp/store"
 )
 
 // Store errors.
 var (
-	ErrAgentNotFound      = errors.New("agent not found")
+	ErrAgentNotFound     = errors.New("agent not found")
 	ErrCredentialNotFound = errors.New("credential not found")
-	ErrInvalidAgent       = errors.New("invalid agent")
+	ErrInvalidAgent      = errors.New("invalid agent")
 )
 
 // AgentStore persists agents and their lifecycle state.
 type AgentStore interface {
-	PutAgent(agent *lifecycle.Agent) error
-	GetAgent(did string) (*lifecycle.Agent, error)
+	PutAgent(ctx context.Context, agent *lifecycle.Agent) error
+	GetAgent(ctx context.Context, did string) (*lifecycle.Agent, error)
 }
 
 // MemoryStore is the composed in-memory backend.
@@ -67,32 +68,34 @@ func New() *MemoryStore {
 
 // --- agents ---
 
-// PutAgent stores or replaces an agent.
-func (s *MemoryStore) PutAgent(agent *lifecycle.Agent) error {
+// PutAgent stores a defensive copy of the agent.
+func (s *MemoryStore) PutAgent(_ context.Context, agent *lifecycle.Agent) error {
 	if agent == nil || agent.DID == "" {
-		return fmt.Errorf("aitp/store: %w: missing DID", ErrInvalidAgent)
+		return fmt.Errorf("adtp/store: %w: missing DID", ErrInvalidAgent)
 	}
+	cp := *agent
 	s.mu.Lock()
-	s.agents[agent.DID] = agent
+	s.agents[agent.DID] = &cp
 	s.mu.Unlock()
 	return nil
 }
 
-// GetAgent returns the agent for did, or ErrAgentNotFound.
-func (s *MemoryStore) GetAgent(did string) (*lifecycle.Agent, error) {
+// GetAgent returns a defensive copy of the agent for did, or ErrAgentNotFound.
+func (s *MemoryStore) GetAgent(_ context.Context, did string) (*lifecycle.Agent, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	a, ok := s.agents[did]
 	if !ok {
-		return nil, fmt.Errorf("aitp/store: %w: %s", ErrAgentNotFound, did)
+		return nil, fmt.Errorf("adtp/store: %w: %s", ErrAgentNotFound, did)
 	}
-	return a, nil
+	cp := *a
+	return &cp, nil
 }
 
 // --- credentials / proof store ---
 
 // PutCredential stores raw under its CID and returns that CID.
-func (s *MemoryStore) PutCredential(raw []byte) (string, error) {
+func (s *MemoryStore) PutCredential(_ context.Context, raw []byte) (string, error) {
 	cid := credential.ComputeCID(raw)
 	s.mu.Lock()
 	if _, exists := s.credentials[cid]; !exists {
@@ -105,18 +108,18 @@ func (s *MemoryStore) PutCredential(raw []byte) (string, error) {
 
 // Get returns the bytes stored under cid (delegation.ProofStore and
 // revocation.CredentialStore).
-func (s *MemoryStore) Get(cid string) ([]byte, error) {
+func (s *MemoryStore) Get(_ context.Context, cid string) ([]byte, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	raw, ok := s.credentials[cid]
 	if !ok {
-		return nil, fmt.Errorf("aitp/store: %w: %s", ErrCredentialNotFound, cid)
+		return nil, fmt.Errorf("adtp/store: %w: %s", ErrCredentialNotFound, cid)
 	}
 	return append([]byte(nil), raw...), nil
 }
 
 // ListCredentials returns all stored credential CIDs in insertion order.
-func (s *MemoryStore) ListCredentials() ([]string, error) {
+func (s *MemoryStore) ListCredentials(_ context.Context) ([]string, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return append([]string(nil), s.credOrder...), nil
@@ -125,36 +128,36 @@ func (s *MemoryStore) ListCredentials() ([]string, error) {
 // --- registration index ---
 
 // Register records that credentialCID's chain contains each of chainCIDs.
-func (s *MemoryStore) Register(credentialCID string, chainCIDs []string) error {
-	return s.registrations.Register(credentialCID, chainCIDs)
+func (s *MemoryStore) Register(ctx context.Context, credentialCID string, chainCIDs []string) error {
+	return s.registrations.Register(ctx, credentialCID, chainCIDs)
 }
 
 // FindDescendants returns the credentials whose chain contains cid.
-func (s *MemoryStore) FindDescendants(cid string) ([]string, error) {
-	return s.registrations.FindDescendants(cid)
+func (s *MemoryStore) FindDescendants(ctx context.Context, cid string) ([]string, error) {
+	return s.registrations.FindDescendants(ctx, cid)
 }
 
 // Contains reports whether credentialCID's chain is recorded as containing
 // chainCID.
-func (s *MemoryStore) Contains(credentialCID, chainCID string) bool {
-	return s.registrations.Contains(credentialCID, chainCID)
+func (s *MemoryStore) Contains(ctx context.Context, credentialCID, chainCID string) bool {
+	return s.registrations.Contains(ctx, credentialCID, chainCID)
 }
 
 // --- revocation ---
 
 // GetStatus returns the latest revocation entry for a subject, or nil.
-func (s *MemoryStore) GetStatus(subject string) (*revocation.RevocationEntry, error) {
-	return s.revocations.GetStatus(subject)
+func (s *MemoryStore) GetStatus(ctx context.Context, subject string) (*revocation.RevocationEntry, error) {
+	return s.revocations.GetStatus(ctx, subject)
 }
 
 // Revoke applies a revocation entry.
-func (s *MemoryStore) Revoke(entry revocation.RevocationEntry) error {
-	return s.revocations.Revoke(entry)
+func (s *MemoryStore) Revoke(ctx context.Context, entry revocation.RevocationEntry) error {
+	return s.revocations.Revoke(ctx, entry)
 }
 
 // CurrentSeq returns the highest sequence recorded for a subject.
-func (s *MemoryStore) CurrentSeq(subject string) int64 {
-	return s.revocations.CurrentSeq(subject)
+func (s *MemoryStore) CurrentSeq(ctx context.Context, subject string) (int64, error) {
+	return s.revocations.CurrentSeq(ctx, subject)
 }
 
 // UpdateFromList applies a signed revocation list after verifying its signature
@@ -164,7 +167,7 @@ func (s *MemoryStore) UpdateFromList(list *revocation.RevocationList, issuerPub 
 }
 
 // RevocationEntries snapshots the latest revocation entry per subject.
-func (s *MemoryStore) RevocationEntries() ([]revocation.RevocationEntry, error) {
+func (s *MemoryStore) RevocationEntries(_ context.Context) ([]revocation.RevocationEntry, error) {
 	return s.revocations.Entries(), nil
 }
 

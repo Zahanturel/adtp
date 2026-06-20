@@ -17,20 +17,20 @@ import (
 // parent (a hop never widens it).
 func CreateRestateHop(parent *UCAN, childAud string, attSubset []Capability, signerKey ed25519.PrivateKey) (string, error) {
 	if parent == nil {
-		return "", fmt.Errorf("aitp/credential: %w: nil parent", ErrMissingField)
+		return "", fmt.Errorf("adtp/credential: %w: nil parent", ErrMissingField)
 	}
 	if len(signerKey) != ed25519.PrivateKeySize {
-		return "", fmt.Errorf("aitp/credential: %w", ErrInvalidKey)
+		return "", fmt.Errorf("adtp/credential: %w", ErrInvalidKey)
 	}
 	if childAud == "" {
-		return "", fmt.Errorf("aitp/credential: %w: audience", ErrMissingField)
+		return "", fmt.Errorf("adtp/credential: %w: audience", ErrMissingField)
 	}
 	if len(attSubset) == 0 {
-		return "", fmt.Errorf("aitp/credential: %w: RESTATE hop must restate at least one capability", ErrMissingField)
+		return "", fmt.Errorf("adtp/credential: %w: RESTATE hop must restate at least one capability", ErrMissingField)
 	}
 	for i, c := range attSubset {
 		if err := c.Validate(); err != nil {
-			return "", fmt.Errorf("aitp/credential: att[%d]: %w", i, err)
+			return "", fmt.Errorf("adtp/credential: att[%d]: %w", i, err)
 		}
 	}
 

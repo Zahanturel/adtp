@@ -3,8 +3,8 @@ package credential_test
 import (
 	"testing"
 
-	"github.com/adtp/adtp/internal/credential"
-	"github.com/adtp/adtp/internal/identity"
+	"github.com/Zahanturel/adtp/internal/credential"
+	"github.com/Zahanturel/adtp/internal/identity"
 )
 
 // TestPhase1EndToEnd exercises the full cryptographic-core flow from the build

@@ -4,9 +4,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/adtp/adtp/internal/credential"
-	"github.com/adtp/adtp/internal/identity"
-	"github.com/adtp/adtp/store"
+	"github.com/Zahanturel/adtp/internal/credential"
+	"github.com/Zahanturel/adtp/internal/identity"
+	"github.com/Zahanturel/adtp/store"
 )
 
 // Compile-time check that the real backend satisfies the unified interface.

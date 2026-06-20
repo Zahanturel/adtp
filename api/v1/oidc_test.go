@@ -18,11 +18,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/adtp/adtp/config"
-	"github.com/adtp/adtp/internal/identity"
-	"github.com/adtp/adtp/internal/verify"
-	"github.com/adtp/adtp/pkg/adtp"
-	"github.com/adtp/adtp/store/memory"
+	"github.com/Zahanturel/adtp/config"
+	"github.com/Zahanturel/adtp/internal/identity"
+	"github.com/Zahanturel/adtp/internal/verify"
+	"github.com/Zahanturel/adtp/pkg/adtp"
+	"github.com/Zahanturel/adtp/store/memory"
 )
 
 func b64url(b []byte) string { return base64.RawURLEncoding.EncodeToString(b) }

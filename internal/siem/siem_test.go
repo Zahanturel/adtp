@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/adtp/adtp/internal/audit"
+	"github.com/Zahanturel/adtp/internal/audit"
 )
 
 func testLogger() *slog.Logger { return slog.New(slog.NewTextHandler(io.Discard, nil)) }

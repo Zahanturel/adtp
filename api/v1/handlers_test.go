@@ -2,6 +2,7 @@ package v1
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -12,13 +13,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/adtp/adtp/config"
-	"github.com/adtp/adtp/internal/credential"
-	"github.com/adtp/adtp/internal/identity"
-	"github.com/adtp/adtp/internal/lifecycle"
-	"github.com/adtp/adtp/internal/verify"
-	"github.com/adtp/adtp/pkg/adtp"
-	"github.com/adtp/adtp/store/memory"
+	"github.com/Zahanturel/adtp/config"
+	"github.com/Zahanturel/adtp/internal/credential"
+	"github.com/Zahanturel/adtp/internal/identity"
+	"github.com/Zahanturel/adtp/internal/lifecycle"
+	"github.com/Zahanturel/adtp/internal/verify"
+	"github.com/Zahanturel/adtp/pkg/adtp"
+	"github.com/Zahanturel/adtp/store/memory"
 )
 
 // faultyStore wraps the in-memory store and injects failures on selected writes
@@ -32,25 +33,25 @@ type faultyStore struct {
 
 var errFaulty = errors.New("injected store fault")
 
-func (f *faultyStore) PutAgent(a *lifecycle.Agent) error {
+func (f *faultyStore) PutAgent(ctx context.Context, a *lifecycle.Agent) error {
 	if f.failPutAgent {
 		return errFaulty
 	}
-	return f.MemoryStore.PutAgent(a)
+	return f.MemoryStore.PutAgent(ctx, a)
 }
 
-func (f *faultyStore) PutCredential(raw []byte) (string, error) {
+func (f *faultyStore) PutCredential(ctx context.Context, raw []byte) (string, error) {
 	if f.failPutCredential {
 		return "", errFaulty
 	}
-	return f.MemoryStore.PutCredential(raw)
+	return f.MemoryStore.PutCredential(ctx, raw)
 }
 
-func (f *faultyStore) Register(cid string, chain []string) error {
+func (f *faultyStore) Register(ctx context.Context, cid string, chain []string) error {
 	if f.failRegister {
 		return errFaulty
 	}
-	return f.MemoryStore.Register(cid, chain)
+	return f.MemoryStore.Register(ctx, cid, chain)
 }
 
 func TestHandlerStoreFailures(t *testing.T) {
@@ -158,7 +159,12 @@ func post(t *testing.T, url string, body any, out any) int {
 
 func get(t *testing.T, url string, out any) int {
 	t.Helper()
-	resp, err := http.Get(url)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		t.Fatalf("GET %s: %v", url, err)
+	}
+	req.Header.Set("Authorization", "Bearer "+testAPIKey)
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("GET %s: %v", url, err)
 	}
@@ -407,7 +413,7 @@ func TestAPIVerifyProvidedInvocation(t *testing.T) {
 		var resp adtp.VerifyResponse
 		post(t, srv.URL+"/v1/verify", adtp.VerifyRequest{
 			ChainCIDs: []string{"bafkreix"}, Action: "tool/invoke", Resource: "tool://s/x",
-			Invocation: json.RawMessage(`{"typ":"aitp/inv/1"}`),
+			Invocation: json.RawMessage(`{"typ":"adtp/inv/1"}`),
 		}, &resp)
 		if resp.Authorized {
 			t.Errorf("empty invocation should not authorize")
@@ -667,7 +673,7 @@ func TestAPIErrorSanitization(t *testing.T) {
 	if errResp.Error != "parent cannot delegate" {
 		t.Errorf("error = %q, want generic 'parent cannot delegate'", errResp.Error)
 	}
-	if strings.Contains(errResp.Error, "aitp/") || strings.Contains(errResp.Error, "agent/delegate") {
+	if strings.Contains(errResp.Error, "adtp/") || strings.Contains(errResp.Error, "agent/delegate") {
 		t.Errorf("response leaked internal detail: %q", errResp.Error)
 	}
 }

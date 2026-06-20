@@ -1,4 +1,4 @@
-// Package verify implements the AITP 13-step verification algorithm
+// Package verify implements the ADTP 13-step verification algorithm
 // (specification Section 11), proof-of-possession (Section 10), and the
 // RESTATE-mode attenuation checks layered on the credential primitives.
 package verify
@@ -46,10 +46,10 @@ const (
 
 // External response codes (Section 10.6).
 const (
-	ExtMalformed = "AITP_MALFORMED"
-	ExtDenied    = "AITP_DENIED"
-	ExtRevoked   = "AITP_REVOKED"
-	ExtRetry     = "AITP_RETRY"
+	ExtMalformed = "ADTP_MALFORMED"
+	ExtDenied    = "ADTP_DENIED"
+	ExtRevoked   = "ADTP_REVOKED"
+	ExtRetry     = "ADTP_RETRY"
 )
 
 // VerificationError is a structured verification failure carrying the step at
@@ -63,9 +63,9 @@ type VerificationError struct {
 
 func (e *VerificationError) Error() string {
 	if e.Detail == "" {
-		return fmt.Sprintf("aitp/verify: step %d: %s", e.Step, e.Code)
+		return fmt.Sprintf("adtp/verify: step %d: %s", e.Step, e.Code)
 	}
-	return fmt.Sprintf("aitp/verify: step %d: %s: %s", e.Step, e.Code, e.Detail)
+	return fmt.Sprintf("adtp/verify: step %d: %s: %s", e.Step, e.Code, e.Detail)
 }
 
 func (e *VerificationError) Unwrap() error { return e.cause }

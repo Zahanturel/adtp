@@ -15,7 +15,16 @@ func NewRouter(svc *Service) http.Handler {
 	mux.HandleFunc("GET /v1/status/{cid}", handleGetStatus(svc))
 	mux.HandleFunc("GET /v1/agents/{did}", handleGetAgent(svc))
 	mux.HandleFunc("GET /health", handleHealth(svc))
-	return svc.authGate()(mux)
+
+	var h http.Handler = svc.authGate()(mux)
+	if rps := svc.Config.Server.RateLimitRPS; rps > 0 {
+		burst := svc.Config.Server.RateLimitBurst
+		if burst <= 0 {
+			burst = int(rps)
+		}
+		h = RateLimitMiddleware(rps, burst)(h)
+	}
+	return h
 }
 
 // authGate selects the authentication middleware: OIDC bearer-token validation

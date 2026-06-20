@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/adtp/adtp/internal/signing"
+	"github.com/Zahanturel/adtp/internal/signing"
 )
 
 func sealAtt(t *testing.T) []Capability {
@@ -63,7 +63,7 @@ func TestVerifyAttSealRejectsTamper(t *testing.T) {
 
 	t.Run("wrong typ", func(t *testing.T) {
 		bad := *seal
-		bad.Typ = "aitp/ucan/1"
+		bad.Typ = "adtp/ucan/1"
 		if err := VerifyAttSeal(&bad, att, signerKey.Public().(ed25519.PublicKey)); !errors.Is(err, ErrNotAttSeal) {
 			t.Errorf("err = %v, want ErrNotAttSeal", err)
 		}

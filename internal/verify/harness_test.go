@@ -5,11 +5,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/adtp/adtp/internal/audit"
-	"github.com/adtp/adtp/internal/credential"
-	"github.com/adtp/adtp/internal/delegation"
-	"github.com/adtp/adtp/internal/identity"
-	"github.com/adtp/adtp/internal/revocation"
+	"github.com/Zahanturel/adtp/internal/audit"
+	"github.com/Zahanturel/adtp/internal/credential"
+	"github.com/Zahanturel/adtp/internal/delegation"
+	"github.com/Zahanturel/adtp/internal/identity"
+	"github.com/Zahanturel/adtp/internal/revocation"
 )
 
 func genKey(t *testing.T) (ed25519.PrivateKey, string) {

@@ -8,10 +8,10 @@
   <meta property="og:title" content="Zerith — Identity infrastructure for AI agents">
   <meta property="og:description" content="Cryptographic delegation chains. Provably-complete revocation. Cross-organizational trust. Open protocol.">
   <meta property="og:type" content="website">
-  <meta property="og:url" content="https://zerith.sh">
+  <meta property="og:url" content="https://zahanturel.github.io/adtp/">
   <meta name="theme-color" content="#F0EBE3">
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
-  <link rel="canonical" href="https://zerith.sh">
+  <link rel="canonical" href="https://zahanturel.github.io/adtp/">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif&display=swap" rel="stylesheet">
@@ -324,7 +324,7 @@
       <p>Cryptographic delegation chains. Provably-complete revocation. Cross-organizational trust. Open protocol.</p>
       <div class="hero-buttons">
         <a href="https://github.com/Zahanturel/adtp" class="btn btn-primary" target="_blank" rel="noopener">View on GitHub</a>
-        <a href="https://github.com/Zahanturel/adtp/blob/main/README.md" class="btn btn-secondary">Read the protocol</a>
+        <a href="https://github.com/Zahanturel/adtp/blob/main/docs/PROTOCOL.md" class="btn btn-secondary">Read the protocol</a>
       </div>
     </div>
   </header>
@@ -367,7 +367,6 @@
         <div class="capability">
           <h3>Cascade revocation</h3>
           <p>Revoke one credential. A registration invariant guarantees every descendant is also revoked. Not best effort&hairsp;&mdash;&hairsp;provably complete.</p>
-          <span class="tag">patent pending</span>
         </div>
 
         <div class="capability">
@@ -405,7 +404,7 @@
     <div class="wrap">
       <div class="section-label">technical</div>
       <h2>Built like infrastructure</h2>
-      <p>Go daemon. Single static binary. One process, no runtime dependencies. Ed25519 signatures with a post-quantum migration path to ML-DSA-65. Thirteen-step credential chain verification. Apache&nbsp;2.0 open source.</p>
+      <p>Go daemon. Single static binary. One process, no runtime dependencies. Ed25519 signatures with a planned post-quantum migration path (ML-DSA-65). Thirteen-step credential chain verification. Apache&nbsp;2.0 open source.</p>
     </div>
   </section>
 
@@ -421,8 +420,9 @@
         <span class="comment"># Run the daemon</span><br>
         <span class="cmd">./adtpd <span class="flag">--config</span> config.yaml</span><br>
         <span class="output"># → adtpd listening on 127.0.0.1:8080</span><br>
+        <span class="output"># → generated API key: abc123...  ← copy this</span><br>
         <br>
-        <span class="comment"># Register an agent</span><br>
+        <span class="comment"># Register an agent (use the API key printed above)</span><br>
         <span class="cmd">curl <span class="flag">-H</span> <span class="string">"Authorization: Bearer &lt;api-key&gt;"</span> \</span><br>
         <span class="cmd">&nbsp;&nbsp;<span class="flag">-X POST</span> localhost:8080/v1/agents \</span><br>
         <span class="cmd">&nbsp;&nbsp;<span class="flag">-d</span> <span class="string">'{"sponsor_did":"did:key:z6Mk..."}'</span></span>
@@ -437,7 +437,7 @@
       <p>Apache 2.0 license. Open source.</p>
       <div class="footer-links">
         <a href="https://github.com/Zahanturel/adtp" target="_blank" rel="noopener">GitHub</a>
-        <a href="https://github.com/Zahanturel/adtp/blob/main/README.md" target="_blank" rel="noopener">Protocol</a>
+        <a href="https://github.com/Zahanturel/adtp/blob/main/docs/PROTOCOL.md" target="_blank" rel="noopener">Protocol</a>
         <a href="https://www.apache.org/licenses/LICENSE-2.0" target="_blank" rel="noopener">License</a>
       </div>
       <p style="margin-top: 32px; font-size: 13px;">Built by Zahan Turel</p>

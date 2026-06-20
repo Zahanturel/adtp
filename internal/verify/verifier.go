@@ -1,14 +1,15 @@
 package verify
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
 	"time"
 
-	"github.com/adtp/adtp/internal/audit"
-	"github.com/adtp/adtp/internal/credential"
-	"github.com/adtp/adtp/internal/delegation"
+	"github.com/Zahanturel/adtp/internal/audit"
+	"github.com/Zahanturel/adtp/internal/credential"
+	"github.com/Zahanturel/adtp/internal/delegation"
 )
 
 // slowThresholdMs is the latency above which a verification is reported slow
@@ -99,7 +100,7 @@ type VerificationResult struct {
 // run.delegation CID and resolved from the proof store; token, when non-nil, is
 // the inline leaf UCAN and is made resolvable for the walk. Steps 11 and 12 are
 // stubs until Phase 3.
-func Verify(token *credential.UCAN, inv *UCANInvocation, config *VerifierConfig) *VerificationResult {
+func Verify(ctx context.Context, token *credential.UCAN, inv *UCANInvocation, config *VerifierConfig) *VerificationResult {
 	start := time.Now()
 	res := &VerificationResult{}
 
@@ -142,7 +143,7 @@ func Verify(token *credential.UCAN, inv *UCANInvocation, config *VerifierConfig)
 
 	store := effectiveStore(config, token)
 
-	chain, err := step1BuildChain(leafCID, store, config.MaxChainDepth)
+	chain, err := step1BuildChain(ctx, leafCID, store, config.MaxChainDepth)
 	if err != nil {
 		return fail(asVErr(err))
 	}
@@ -166,21 +167,21 @@ func Verify(token *credential.UCAN, inv *UCANInvocation, config *VerifierConfig)
 	}
 
 	tier := config.tierFor(inv.Run.Resource)
-	if e := asVErr(step6Revocation(chain, config.RevocationCache, tier, config.logger())); e != nil {
+	if e := asVErr(step6Revocation(ctx, chain, config.RevocationCache, tier, config.logger())); e != nil {
 		return fail(e)
 	}
 	if e := asVErr(step7Attenuation(chain)); e != nil {
 		return fail(e)
 	}
 
-	ctx := InvocationContext{
+	invCtx := InvocationContext{
 		Action:          inv.Run.Action,
 		Resource:        inv.Run.Resource,
 		Parameters:      inv.Run.Parameters,
 		Now:             config.now(),
 		MeteringEnabled: config.MeteringEnabled,
 	}
-	authorized, e8 := step8Authorization(chain, ctx)
+	authorized, e8 := step8Authorization(chain, invCtx)
 	if e8 != nil {
 		return fail(asVErr(e8))
 	}
@@ -228,7 +229,7 @@ func effectiveStore(config *VerifierConfig, token *credential.UCAN) delegation.P
 
 type emptyStore struct{}
 
-func (emptyStore) Get(cid string) ([]byte, error) {
+func (emptyStore) Get(_ context.Context, cid string) ([]byte, error) {
 	return nil, fmt.Errorf("%w: %s", delegation.ErrProofNotFound, cid)
 }
 
@@ -238,9 +239,9 @@ type overlayStore struct {
 	raw  []byte
 }
 
-func (o overlayStore) Get(cid string) ([]byte, error) {
+func (o overlayStore) Get(ctx context.Context, cid string) ([]byte, error) {
 	if cid == o.cid {
 		return o.raw, nil
 	}
-	return o.base.Get(cid)
+	return o.base.Get(ctx, cid)
 }

@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/adtp/adtp/internal/signing"
+	"github.com/Zahanturel/adtp/internal/signing"
 )
 
 // The five capability abilities. The set is closed per ucv (specification

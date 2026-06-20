@@ -8,11 +8,7 @@ import (
 	"fmt"
 )
 
-// DomainPrefix is the ASCII domain-separation tag prepended to every non-JWT
-// signing input (SD-2). Together with the per-object typ field it ensures a
-// signature produced for one kind of object can never be reinterpreted as a
-// signature over another, and that no signing input is a raw concatenation of
-// variable-length fields.
+// DomainPrefix is frozen at "AITP1" per spec v0.3. Changing it invalidates all existing signatures.
 const DomainPrefix = "AITP1"
 
 // sigField is the object member that carries the signature itself and is
@@ -48,18 +44,18 @@ var (
 func SignatureInput(obj any) ([]byte, error) {
 	marshaled, err := json.Marshal(obj)
 	if err != nil {
-		return nil, fmt.Errorf("aitp/signing: marshal object: %w", err)
+		return nil, fmt.Errorf("adtp/signing: marshal object: %w", err)
 	}
 
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(marshaled, &fields); err != nil {
-		return nil, fmt.Errorf("aitp/signing: %w: %v", ErrNotObject, err)
+		return nil, fmt.Errorf("adtp/signing: %w: %v", ErrNotObject, err)
 	}
 	delete(fields, sigField)
 
 	stripped, err := json.Marshal(fields)
 	if err != nil {
-		return nil, fmt.Errorf("aitp/signing: re-marshal object: %w", err)
+		return nil, fmt.Errorf("adtp/signing: re-marshal object: %w", err)
 	}
 	canon, err := Canonicalize(stripped)
 	if err != nil {
@@ -78,7 +74,7 @@ func SignatureInput(obj any) ([]byte, error) {
 // member (see EncodeSignature).
 func Sign(obj any, priv ed25519.PrivateKey) ([]byte, error) {
 	if len(priv) != ed25519.PrivateKeySize {
-		return nil, fmt.Errorf("aitp/signing: %w: have %d bytes, want %d",
+		return nil, fmt.Errorf("adtp/signing: %w: have %d bytes, want %d",
 			ErrInvalidPrivateKey, len(priv), ed25519.PrivateKeySize)
 	}
 	input, err := SignatureInput(obj)
@@ -93,11 +89,11 @@ func Sign(obj any, priv ed25519.PrivateKey) ([]byte, error) {
 // (ErrVerification on a cryptographic mismatch) otherwise.
 func Verify(obj any, sig []byte, pub ed25519.PublicKey) error {
 	if len(pub) != ed25519.PublicKeySize {
-		return fmt.Errorf("aitp/signing: %w: have %d bytes, want %d",
+		return fmt.Errorf("adtp/signing: %w: have %d bytes, want %d",
 			ErrInvalidPublicKey, len(pub), ed25519.PublicKeySize)
 	}
 	if len(sig) != ed25519.SignatureSize {
-		return fmt.Errorf("aitp/signing: %w: have %d bytes, want %d",
+		return fmt.Errorf("adtp/signing: %w: have %d bytes, want %d",
 			ErrInvalidSignature, len(sig), ed25519.SignatureSize)
 	}
 	input, err := SignatureInput(obj)
@@ -122,7 +118,7 @@ func EncodeSignature(sig []byte) string {
 func DecodeSignature(s string) ([]byte, error) {
 	b, err := base64.RawURLEncoding.DecodeString(s)
 	if err != nil {
-		return nil, fmt.Errorf("aitp/signing: %w: %v", ErrInvalidSignature, err)
+		return nil, fmt.Errorf("adtp/signing: %w: %v", ErrInvalidSignature, err)
 	}
 	return b, nil
 }

@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/adtp/adtp/internal/signing"
+	"github.com/Zahanturel/adtp/internal/signing"
 )
 
 func TestRevocationEntryRoundTrip(t *testing.T) {
@@ -48,7 +48,7 @@ func TestVerifyRevocationEntryRejects(t *testing.T) {
 	})
 	t.Run("wrong typ", func(t *testing.T) {
 		bad := *entry
-		bad.Typ = "aitp/ucan/1"
+		bad.Typ = "adtp/ucan/1"
 		if err := VerifyRevocationEntry(&bad, key.Public().(ed25519.PublicKey)); !errors.Is(err, ErrNotRevocationEntry) {
 			t.Errorf("err = %v, want ErrNotRevocationEntry", err)
 		}

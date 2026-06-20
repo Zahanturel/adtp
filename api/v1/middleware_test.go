@@ -7,7 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/adtp/adtp/pkg/adtp"
+	"github.com/Zahanturel/adtp/pkg/adtp"
 )
 
 // doReq issues a request with an optional bearer token and returns the status.
@@ -62,8 +62,23 @@ func TestAuthMiddleware(t *testing.T) {
 			t.Errorf("code = %d, want 200", code)
 		}
 	})
-	t.Run("read-only status open without auth -> 200", func(t *testing.T) {
-		if code := doReq(t, http.MethodGet, srv.URL+"/v1/status/bafkreitest", "", nil); code != http.StatusOK {
+	t.Run("GET status requires auth -> 401", func(t *testing.T) {
+		if code := doReq(t, http.MethodGet, srv.URL+"/v1/status/bafkreitest", "", nil); code != http.StatusUnauthorized {
+			t.Errorf("code = %d, want 401", code)
+		}
+	})
+	t.Run("GET status with valid key -> 200", func(t *testing.T) {
+		if code := doReq(t, http.MethodGet, srv.URL+"/v1/status/bafkreitest", testAPIKey, nil); code != http.StatusOK {
+			t.Errorf("code = %d, want 200", code)
+		}
+	})
+	t.Run("GET agents requires auth -> 401", func(t *testing.T) {
+		if code := doReq(t, http.MethodGet, srv.URL+"/v1/agents/did:key:z6MkTest", "", nil); code != http.StatusUnauthorized {
+			t.Errorf("code = %d, want 401", code)
+		}
+	})
+	t.Run("revocation list open without auth -> 200", func(t *testing.T) {
+		if code := doReq(t, http.MethodGet, srv.URL+"/v1/revocation/list", testAPIKey, nil); code != http.StatusOK {
 			t.Errorf("code = %d, want 200", code)
 		}
 	})

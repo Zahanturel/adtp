@@ -1,11 +1,12 @@
 package delegation
 
 import (
+	"context"
 	"crypto/ed25519"
 	"errors"
 	"testing"
 
-	"github.com/adtp/adtp/internal/credential"
+	"github.com/Zahanturel/adtp/internal/credential"
 )
 
 func TestDelegateRestrictSuccess(t *testing.T) {
@@ -28,7 +29,7 @@ func TestDelegateRestrictSuccess(t *testing.T) {
 		t.Errorf("dl = %d, want 4", block.DL)
 	}
 	// The block is retrievable from the store under its returned CID.
-	if _, err := store.Get(cid); err != nil {
+	if _, err := store.Get(context.Background(), cid); err != nil {
 		t.Errorf("stored block not found: %v", err)
 	}
 	if err := block.Verify(agentKey.Public().(ed25519.PublicKey)); err != nil {
@@ -80,7 +81,7 @@ func TestDelegateRestateSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DelegateRestate: %v", err)
 	}
-	if _, err := store.Get(cid); err != nil {
+	if _, err := store.Get(context.Background(), cid); err != nil {
 		t.Errorf("stored hop not found: %v", err)
 	}
 	hop, err := credential.ParseUCAN(token)

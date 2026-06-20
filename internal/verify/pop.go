@@ -8,12 +8,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/adtp/adtp/internal/identity"
-	"github.com/adtp/adtp/internal/signing"
+	"github.com/Zahanturel/adtp/internal/identity"
+	"github.com/Zahanturel/adtp/internal/signing"
 )
 
 // InvocationTyp is the typ tag of a UCANInvocation (SD-1).
-const InvocationTyp = "aitp/inv/1"
+const InvocationTyp = "adtp/inv/1"
 
 const (
 	// invocationLifetime is the maximum exp - iat for an invocation (Section 10).
@@ -78,7 +78,7 @@ func NewMemoryNonceCache() *MemoryNonceCache {
 	id := make([]byte, 16)
 	if _, err := rand.Read(id); err != nil {
 		// crypto/rand failure is fatal for a security component.
-		panic("aitp/verify: cannot initialize nonce cache instance id: " + err.Error())
+		panic("adtp/verify: cannot initialize nonce cache instance id: " + err.Error())
 	}
 	return &MemoryNonceCache{instanceID: base64.RawURLEncoding.EncodeToString(id)}
 }
@@ -103,11 +103,11 @@ func (c *MemoryNonceCache) InstanceID() string { return c.instanceID }
 // audience.
 func CreateInvocation(leafCID, action, resource string, params map[string]any, presenterKey ed25519.PrivateKey, verifierDID, channelBinding string) (*UCANInvocation, error) {
 	if len(presenterKey) != ed25519.PrivateKeySize {
-		return nil, fmt.Errorf("aitp/verify: invalid presenter key")
+		return nil, fmt.Errorf("adtp/verify: invalid presenter key")
 	}
 	nonce := make([]byte, 16)
 	if _, err := rand.Read(nonce); err != nil {
-		return nil, fmt.Errorf("aitp/verify: nonce: %w", err)
+		return nil, fmt.Errorf("adtp/verify: nonce: %w", err)
 	}
 	now := time.Now().Unix()
 	inv := &UCANInvocation{
@@ -127,7 +127,7 @@ func CreateInvocation(leafCID, action, resource string, params map[string]any, p
 	}
 	sig, err := signing.Sign(inv, presenterKey)
 	if err != nil {
-		return nil, fmt.Errorf("aitp/verify: sign invocation: %w", err)
+		return nil, fmt.Errorf("adtp/verify: sign invocation: %w", err)
 	}
 	inv.Sig = signing.EncodeSignature(sig)
 	return inv, nil

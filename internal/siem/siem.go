@@ -15,7 +15,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/adtp/adtp/internal/audit"
+	"github.com/Zahanturel/adtp/internal/audit"
 )
 
 // Config configures the SIEM webhook export.
@@ -136,7 +136,9 @@ func (e *Exporter) Flush() {
 		e.mu.Lock()
 		e.buf = append(batch, e.buf...)
 		if len(e.buf) > e.maxBuffered {
-			e.buf = e.buf[len(e.buf)-e.maxBuffered:]
+			drop := len(e.buf) - e.maxBuffered
+			e.buf = e.buf[drop:]
+			e.logger.Warn("siem requeue overflow; dropping oldest audit events", "dropped", drop)
 		}
 		e.mu.Unlock()
 	}

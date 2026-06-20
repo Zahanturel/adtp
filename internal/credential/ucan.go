@@ -8,14 +8,14 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/adtp/adtp/internal/signing"
+	"github.com/Zahanturel/adtp/internal/signing"
 )
 
 // UCAN header constants. JWT credentials retain JWS compact form for ecosystem
-// compatibility; the header carries the AITP typ and version (specification
+// compatibility; the header carries the ADTP typ and version (specification
 // SD-4, Section 8.1).
 const (
-	UCANTyp     = "aitp/ucan/1"
+	UCANTyp     = "adtp/ucan/1"
 	UCANAlg     = "EdDSA"
 	UCANVersion = "0.1.0"
 
@@ -40,7 +40,7 @@ var (
 	ErrSignatureVerification = errors.New("UCAN signature verification failed")
 )
 
-// UCANHeader is the JWS header of an AITP UCAN. A RESTATE hop additionally
+// UCANHeader is the JWS header of an ADTP UCAN. A RESTATE hop additionally
 // carries its att_seal here (Section 9); root credentials omit it.
 type UCANHeader struct {
 	Typ  string   `json:"typ"`
@@ -49,7 +49,7 @@ type UCANHeader struct {
 	Seal *AttSeal `json:"seal,omitempty"`
 }
 
-// UCANPayload is the claim set of an AITP UCAN. All timestamps are integer UNIX
+// UCANPayload is the claim set of an ADTP UCAN. All timestamps are integer UNIX
 // seconds. For a root credential prf is the empty array.
 type UCANPayload struct {
 	Iss string       `json:"iss"`
@@ -88,7 +88,7 @@ func CreateUCAN(payload UCANPayload, priv ed25519.PrivateKey) (string, error) {
 // deterministic function of its contents.
 func createUCAN(header UCANHeader, payload UCANPayload, priv ed25519.PrivateKey) (string, error) {
 	if len(priv) != ed25519.PrivateKeySize {
-		return "", fmt.Errorf("aitp/credential: %w: private key length %d, want %d",
+		return "", fmt.Errorf("adtp/credential: %w: private key length %d, want %d",
 			ErrInvalidKey, len(priv), ed25519.PrivateKeySize)
 	}
 	if err := payload.validateForIssuance(); err != nil {
@@ -105,11 +105,11 @@ func createUCAN(header UCANHeader, payload UCANPayload, priv ed25519.PrivateKey)
 
 	headerJCS, err := signing.CanonicalizeValue(header)
 	if err != nil {
-		return "", fmt.Errorf("aitp/credential: canonicalize header: %w", err)
+		return "", fmt.Errorf("adtp/credential: canonicalize header: %w", err)
 	}
 	payloadJCS, err := signing.CanonicalizeValue(payload)
 	if err != nil {
-		return "", fmt.Errorf("aitp/credential: canonicalize payload: %w", err)
+		return "", fmt.Errorf("adtp/credential: canonicalize payload: %w", err)
 	}
 
 	signingInput := b64.EncodeToString(headerJCS) + "." + b64.EncodeToString(payloadJCS)
@@ -124,64 +124,64 @@ func createUCAN(header UCANHeader, payload UCANPayload, priv ed25519.PrivateKey)
 func ParseUCAN(token string) (*UCAN, error) {
 	parts := strings.Split(token, ".")
 	if len(parts) != 3 {
-		return nil, fmt.Errorf("aitp/credential: %w: expected 3 dot-separated segments", ErrMalformedToken)
+		return nil, fmt.Errorf("adtp/credential: %w: expected 3 dot-separated segments", ErrMalformedToken)
 	}
 
 	headerBytes, err := b64.DecodeString(parts[0])
 	if err != nil {
-		return nil, fmt.Errorf("aitp/credential: %w: header is not base64url: %v", ErrMalformedToken, err)
+		return nil, fmt.Errorf("adtp/credential: %w: header is not base64url: %v", ErrMalformedToken, err)
 	}
 	payloadBytes, err := b64.DecodeString(parts[1])
 	if err != nil {
-		return nil, fmt.Errorf("aitp/credential: %w: payload is not base64url: %v", ErrMalformedToken, err)
+		return nil, fmt.Errorf("adtp/credential: %w: payload is not base64url: %v", ErrMalformedToken, err)
 	}
 	sig, err := b64.DecodeString(parts[2])
 	if err != nil {
-		return nil, fmt.Errorf("aitp/credential: %w: signature is not base64url: %v", ErrMalformedToken, err)
+		return nil, fmt.Errorf("adtp/credential: %w: signature is not base64url: %v", ErrMalformedToken, err)
 	}
 	if len(sig) != ed25519.SignatureSize {
-		return nil, fmt.Errorf("aitp/credential: %w: signature length %d, want %d",
+		return nil, fmt.Errorf("adtp/credential: %w: signature length %d, want %d",
 			ErrMalformedToken, len(sig), ed25519.SignatureSize)
 	}
 
 	// Enforce the I-JSON profile (no duplicate keys, integers only) on both
 	// segments before decoding into typed structures.
 	if err := signing.ValidateIJSON(headerBytes); err != nil {
-		return nil, fmt.Errorf("aitp/credential: %w: header: %v", ErrMalformedToken, err)
+		return nil, fmt.Errorf("adtp/credential: %w: header: %v", ErrMalformedToken, err)
 	}
 	if err := signing.ValidateIJSON(payloadBytes); err != nil {
-		return nil, fmt.Errorf("aitp/credential: %w: payload: %v", ErrMalformedToken, err)
+		return nil, fmt.Errorf("adtp/credential: %w: payload: %v", ErrMalformedToken, err)
 	}
 
 	var header UCANHeader
 	if err := json.Unmarshal(headerBytes, &header); err != nil {
-		return nil, fmt.Errorf("aitp/credential: %w: header: %v", ErrMalformedToken, err)
+		return nil, fmt.Errorf("adtp/credential: %w: header: %v", ErrMalformedToken, err)
 	}
 	if header.Typ != UCANTyp {
-		return nil, fmt.Errorf("aitp/credential: %w: typ %q, want %q", ErrUnsupportedHeader, header.Typ, UCANTyp)
+		return nil, fmt.Errorf("adtp/credential: %w: typ %q, want %q", ErrUnsupportedHeader, header.Typ, UCANTyp)
 	}
 	if header.Alg != UCANAlg {
-		return nil, fmt.Errorf("aitp/credential: %w: alg %q, want %q", ErrUnsupportedHeader, header.Alg, UCANAlg)
+		return nil, fmt.Errorf("adtp/credential: %w: alg %q, want %q", ErrUnsupportedHeader, header.Alg, UCANAlg)
 	}
 	if _, ok := supportedUCANVersions[header.Ucv]; !ok {
-		return nil, fmt.Errorf("aitp/credential: %w: unsupported ucv %q", ErrUnsupportedHeader, header.Ucv)
+		return nil, fmt.Errorf("adtp/credential: %w: unsupported ucv %q", ErrUnsupportedHeader, header.Ucv)
 	}
 
 	// exp is mandatory; detect its presence (a zero value is not absence).
 	var present map[string]json.RawMessage
 	if err := json.Unmarshal(payloadBytes, &present); err != nil {
-		return nil, fmt.Errorf("aitp/credential: %w: payload: %v", ErrMalformedToken, err)
+		return nil, fmt.Errorf("adtp/credential: %w: payload: %v", ErrMalformedToken, err)
 	}
 	if _, ok := present["exp"]; !ok {
-		return nil, fmt.Errorf("aitp/credential: %w", ErrMissingExpiry)
+		return nil, fmt.Errorf("adtp/credential: %w", ErrMissingExpiry)
 	}
 
 	var payload UCANPayload
 	if err := json.Unmarshal(payloadBytes, &payload); err != nil {
-		return nil, fmt.Errorf("aitp/credential: %w: payload: %v", ErrMalformedToken, err)
+		return nil, fmt.Errorf("adtp/credential: %w: payload: %v", ErrMalformedToken, err)
 	}
 	if len(payload.Att) > MaxCapabilities {
-		return nil, fmt.Errorf("aitp/credential: %w: %d > %d", ErrTooManyCapabilities, len(payload.Att), MaxCapabilities)
+		return nil, fmt.Errorf("adtp/credential: %w: %d > %d", ErrTooManyCapabilities, len(payload.Att), MaxCapabilities)
 	}
 
 	return &UCAN{
@@ -197,7 +197,7 @@ func ParseUCAN(token string) (*UCAN, error) {
 // signing input (SD-6).
 func (u *UCAN) Verify(pub ed25519.PublicKey) error {
 	if len(pub) != ed25519.PublicKeySize {
-		return fmt.Errorf("aitp/credential: %w: public key length %d, want %d",
+		return fmt.Errorf("adtp/credential: %w: public key length %d, want %d",
 			ErrInvalidKey, len(pub), ed25519.PublicKeySize)
 	}
 	if !ed25519.Verify(pub, u.signingInput, u.Signature) {
@@ -222,26 +222,26 @@ var b64 = base64.RawURLEncoding
 
 func (p UCANPayload) validateForIssuance() error {
 	if p.Iss == "" {
-		return fmt.Errorf("aitp/credential: %w: iss", ErrMissingField)
+		return fmt.Errorf("adtp/credential: %w: iss", ErrMissingField)
 	}
 	if p.Aud == "" {
-		return fmt.Errorf("aitp/credential: %w: aud", ErrMissingField)
+		return fmt.Errorf("adtp/credential: %w: aud", ErrMissingField)
 	}
 	if p.Exp <= 0 {
-		return fmt.Errorf("aitp/credential: %w: exp must be a positive timestamp", ErrMissingExpiry)
+		return fmt.Errorf("adtp/credential: %w: exp must be a positive timestamp", ErrMissingExpiry)
 	}
 	if p.Nbf < 0 || p.Iat < 0 {
-		return fmt.Errorf("aitp/credential: %w: nbf and iat must be non-negative", ErrInvalidExpiry)
+		return fmt.Errorf("adtp/credential: %w: nbf and iat must be non-negative", ErrInvalidExpiry)
 	}
 	if p.Nbf > 0 && p.Exp <= p.Nbf {
-		return fmt.Errorf("aitp/credential: %w: exp (%d) must be after nbf (%d)", ErrInvalidExpiry, p.Exp, p.Nbf)
+		return fmt.Errorf("adtp/credential: %w: exp (%d) must be after nbf (%d)", ErrInvalidExpiry, p.Exp, p.Nbf)
 	}
 	if len(p.Att) > MaxCapabilities {
-		return fmt.Errorf("aitp/credential: %w: %d > %d", ErrTooManyCapabilities, len(p.Att), MaxCapabilities)
+		return fmt.Errorf("adtp/credential: %w: %d > %d", ErrTooManyCapabilities, len(p.Att), MaxCapabilities)
 	}
 	for i, c := range p.Att {
 		if err := c.Validate(); err != nil {
-			return fmt.Errorf("aitp/credential: att[%d]: %w", i, err)
+			return fmt.Errorf("adtp/credential: att[%d]: %w", i, err)
 		}
 	}
 	return nil

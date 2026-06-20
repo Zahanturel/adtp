@@ -28,7 +28,7 @@ func TestComputeCIDMatchesIndependentConstruction(t *testing.T) {
 		{},
 		[]byte("hello"),
 		[]byte("hello world"),
-		[]byte(`{"typ":"aitp/ucan/1"}`),
+		[]byte(`{"typ":"adtp/ucan/1"}`),
 		make([]byte, 1024),
 	}
 	for _, in := range inputs {

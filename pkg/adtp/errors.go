@@ -1,14 +1,15 @@
 package adtp
 
-import "github.com/adtp/adtp/internal/verify"
+import "github.com/Zahanturel/adtp/internal/verify"
 
 // External error codes (specification Section 10.6, oracle minimization). A
 // relying party never reveals the internal per-step reason.
 const (
-	CodeMalformed = "ADTP_MALFORMED"
-	CodeDenied    = "ADTP_DENIED"
-	CodeRevoked   = "ADTP_REVOKED"
-	CodeRetry     = "ADTP_RETRY"
+	CodeMalformed    = "ADTP_MALFORMED"
+	CodeDenied       = "ADTP_DENIED"
+	CodeRevoked      = "ADTP_REVOKED"
+	CodeRetry        = "ADTP_RETRY"
+	CodeRateLimited  = "ADTP_RATE_LIMITED"
 )
 
 // ExternalCode maps an internal verification error to its external,

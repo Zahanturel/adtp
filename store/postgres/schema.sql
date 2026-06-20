@@ -1,5 +1,13 @@
--- AITP PostgreSQL storage schema.
+-- ADTP PostgreSQL storage schema.
 -- Applied by the daemon at startup (driver integration arrives in Phase 4).
+
+-- Schema versioning: the daemon checks this table at startup and refuses to
+-- start if the version is newer than what it understands.
+CREATE TABLE IF NOT EXISTS schema_version (
+    version   INT NOT NULL,
+    applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+INSERT INTO schema_version (version) SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM schema_version);
 
 CREATE TABLE IF NOT EXISTS agents (
     did           TEXT PRIMARY KEY,
@@ -50,7 +58,8 @@ CREATE TABLE IF NOT EXISTS revocation_entries (
     UNIQUE (subject_cid, subject_did, seq)
 );
 
-CREATE INDEX IF NOT EXISTS idx_rev_subject ON revocation_entries (subject_cid, subject_did);
+CREATE INDEX IF NOT EXISTS idx_rev_subject_cid ON revocation_entries (subject_cid) WHERE subject_cid <> '';
+CREATE INDEX IF NOT EXISTS idx_rev_subject_did ON revocation_entries (subject_did) WHERE subject_did <> '';
 
 CREATE TABLE IF NOT EXISTS audit_log (
     seq        BIGSERIAL PRIMARY KEY,

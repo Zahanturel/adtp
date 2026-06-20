@@ -16,7 +16,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/adtp/adtp/pkg/adtp"
+	"github.com/Zahanturel/adtp/pkg/adtp"
 )
 
 // ErrOIDCToken reports a bearer token that fails OIDC validation.

@@ -1,12 +1,13 @@
 package revocation
 
 import (
+	"context"
 	"crypto/ed25519"
 	"fmt"
 	"testing"
 
-	"github.com/adtp/adtp/internal/credential"
-	"github.com/adtp/adtp/internal/identity"
+	"github.com/Zahanturel/adtp/internal/credential"
+	"github.com/Zahanturel/adtp/internal/identity"
 )
 
 func genKey(t *testing.T) (ed25519.PrivateKey, string) {
@@ -52,14 +53,14 @@ func (s *testCredStore) put(cid string, raw []byte) {
 	s.order = append(s.order, cid)
 }
 
-func (s *testCredStore) Get(cid string) ([]byte, error) {
+func (s *testCredStore) Get(_ context.Context, cid string) ([]byte, error) {
 	if b, ok := s.m[cid]; ok {
 		return append([]byte(nil), b...), nil
 	}
 	return nil, fmt.Errorf("not found: %s", cid)
 }
 
-func (s *testCredStore) ListCredentials() ([]string, error) {
+func (s *testCredStore) ListCredentials(_ context.Context) ([]string, error) {
 	return append([]string(nil), s.order...), nil
 }
 

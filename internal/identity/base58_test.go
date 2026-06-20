@@ -9,7 +9,7 @@ import (
 )
 
 // base58Vectors are the widely-used Bitcoin/base-x base58btc test vectors. They
-// validate the encoding independently of any AITP-specific code.
+// validate the encoding independently of any ADTP-specific code.
 var base58Vectors = []struct {
 	hexInput string
 	encoded  string

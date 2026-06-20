@@ -1,18 +1,19 @@
 package verify
 
 import (
+	"context"
 	"testing"
 	"time"
 
-	"github.com/adtp/adtp/internal/audit"
-	"github.com/adtp/adtp/internal/credential"
-	"github.com/adtp/adtp/internal/delegation"
-	"github.com/adtp/adtp/internal/revocation"
+	"github.com/Zahanturel/adtp/internal/audit"
+	"github.com/Zahanturel/adtp/internal/credential"
+	"github.com/Zahanturel/adtp/internal/delegation"
+	"github.com/Zahanturel/adtp/internal/revocation"
 )
 
 func TestVerifyHappyPath(t *testing.T) {
 	f := freshChain(t)
-	res := Verify(nil, f.invoke(t), f.config)
+	res := Verify(context.Background(), nil, f.invoke(t), f.config)
 	if !res.OK {
 		t.Fatalf("verification failed: %v", res.Error)
 	}
@@ -30,7 +31,7 @@ func TestVerifyUnauthorizedResource(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateInvocation: %v", err)
 	}
-	res := Verify(nil, inv, f.config)
+	res := Verify(context.Background(), nil, inv, f.config)
 	if res.OK || res.Error.Code != CodeCapInsufficient {
 		t.Errorf("code = %v, want V007 (got OK=%v)", res.Error, res.OK)
 	}
@@ -39,7 +40,7 @@ func TestVerifyUnauthorizedResource(t *testing.T) {
 func TestVerifyExpiredChain(t *testing.T) {
 	now := time.Now().Unix()
 	f := restrictChain(t, now-100, now-3600) // expired
-	res := Verify(nil, f.invoke(t), f.config)
+	res := Verify(context.Background(), nil, f.invoke(t), f.config)
 	if res.OK || res.Error.Code != CodeExpired {
 		t.Errorf("code = %v, want V002 (OK=%v)", res.Error, res.OK)
 	}
@@ -54,10 +55,10 @@ func TestVerifyRevoked(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateRevocationEntry: %v", err)
 	}
-	if err := f.config.RevocationCache.(*revocation.MemoryRevocationCache).Revoke(*entry); err != nil {
+	if err := f.config.RevocationCache.(*revocation.MemoryRevocationCache).Revoke(context.Background(), *entry); err != nil {
 		t.Fatalf("Revoke: %v", err)
 	}
-	res := Verify(nil, f.invoke(t), f.config)
+	res := Verify(context.Background(), nil, f.invoke(t), f.config)
 	if res.OK || res.Error.Code != CodeRevoked {
 		t.Errorf("code = %v, want V004 (OK=%v)", res.Error, res.OK)
 	}
@@ -72,10 +73,10 @@ func TestVerifyCompromised(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateRevocationEntry: %v", err)
 	}
-	if err := f.config.RevocationCache.(*revocation.MemoryRevocationCache).Revoke(*entry); err != nil {
+	if err := f.config.RevocationCache.(*revocation.MemoryRevocationCache).Revoke(context.Background(), *entry); err != nil {
 		t.Fatalf("Revoke: %v", err)
 	}
-	res := Verify(nil, f.invoke(t), f.config)
+	res := Verify(context.Background(), nil, f.invoke(t), f.config)
 	if res.OK || res.Error.Code != CodeCompromised {
 		t.Errorf("code = %v, want V006 (OK=%v)", res.Error, res.OK)
 	}
@@ -98,7 +99,7 @@ func TestVerifyRejectsCIDMismatch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateInvocation: %v", err)
 	}
-	res := Verify(nil, inv, config)
+	res := Verify(context.Background(), nil, inv, config)
 	if res.OK || res.Error.Code != CodeCIDMismatch {
 		t.Errorf("code = %v, want V018 CID mismatch (OK=%v)", res.Error, res.OK)
 	}
@@ -111,7 +112,7 @@ func TestVerifyCrossOrg(t *testing.T) {
 	f.config.TrustedRootDIDs = map[string]bool{}
 
 	// Without a trust policy, an untrusted root is rejected at step 3.
-	if res := Verify(nil, inv, f.config); res.OK || res.Error.Code != CodeUntrustedRoot {
+	if res := Verify(context.Background(), nil, inv, f.config); res.OK || res.Error.Code != CodeUntrustedRoot {
 		t.Fatalf("no-policy code = %v, want V012 (OK=%v)", res.Error, res.OK)
 	}
 
@@ -119,7 +120,7 @@ func TestVerifyCrossOrg(t *testing.T) {
 	// failed before the nonce was consumed (step 3 precedes step 10), so the same
 	// invocation is still fresh.
 	f.config.TrustPolicies = []TrustPolicy{{Platforms: []string{f.platformDID}, MaxDelegationDepth: 10}}
-	if res := Verify(nil, inv, f.config); !res.OK {
+	if res := Verify(context.Background(), nil, inv, f.config); !res.OK {
 		t.Errorf("cross-org with policy failed: %v", res.Error)
 	}
 }
@@ -128,7 +129,7 @@ func TestVerifyCrossOrgDepthPolicy(t *testing.T) {
 	f := freshChain(t)
 	f.config.TrustedRootDIDs = map[string]bool{}
 	f.config.TrustPolicies = []TrustPolicy{{Platforms: []string{f.platformDID}, MaxDelegationDepth: 1}}
-	res := Verify(nil, f.invoke(t), f.config)
+	res := Verify(context.Background(), nil, f.invoke(t), f.config)
 	if res.OK || res.Error.Code != CodeCrossOrg {
 		t.Errorf("code = %v, want V013 (OK=%v)", res.Error, res.OK)
 	}
@@ -137,10 +138,10 @@ func TestVerifyCrossOrgDepthPolicy(t *testing.T) {
 func TestVerifyReplay(t *testing.T) {
 	f := freshChain(t)
 	inv := f.invoke(t)
-	if res := Verify(nil, inv, f.config); !res.OK {
+	if res := Verify(context.Background(), nil, inv, f.config); !res.OK {
 		t.Fatalf("first verify failed: %v", res.Error)
 	}
-	if res := Verify(nil, inv, f.config); res.OK || res.Error.Code != CodePoPFailed {
+	if res := Verify(context.Background(), nil, inv, f.config); res.OK || res.Error.Code != CodePoPFailed {
 		t.Errorf("replay code = %v, want V014 (OK=%v)", res.Error, res.OK)
 	}
 }
@@ -152,7 +153,7 @@ func TestVerifyWrongPresenter(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateInvocation: %v", err)
 	}
-	res := Verify(nil, inv, f.config)
+	res := Verify(context.Background(), nil, inv, f.config)
 	if res.OK || res.Error.Code != CodePoPFailed {
 		t.Errorf("code = %v, want V014 (OK=%v)", res.Error, res.OK)
 	}
@@ -202,7 +203,7 @@ func TestVerifyEscalationRestate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateInvocation: %v", err)
 	}
-	res := Verify(nil, inv, config)
+	res := Verify(context.Background(), nil, inv, config)
 	if res.OK || res.Error.Code != CodeAttenuation {
 		t.Errorf("code = %v, want V008 (OK=%v)", res.Error, res.OK)
 	}
@@ -261,7 +262,7 @@ func TestVerifyDeepChainExceedsDepth(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateInvocation: %v", err)
 	}
-	res := Verify(nil, inv, config)
+	res := Verify(context.Background(), nil, inv, config)
 	if res.OK || res.Error.Code != CodeChainTooDeep {
 		t.Errorf("code = %v, want V010 (OK=%v)", res.Error, res.OK)
 	}
@@ -308,7 +309,7 @@ func TestVerifyRestateHappyPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateInvocation: %v", err)
 	}
-	if res := Verify(nil, inv, config); !res.OK {
+	if res := Verify(context.Background(), nil, inv, config); !res.OK {
 		t.Errorf("RESTATE verification failed: %v", res.Error)
 	}
 }
@@ -347,7 +348,7 @@ func TestVerifyRootOnlyInlineToken(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateInvocation: %v", err)
 	}
-	if res := Verify(root, inv, config); !res.OK {
+	if res := Verify(context.Background(), root, inv, config); !res.OK {
 		t.Errorf("root-only verification failed: %v", res.Error)
 	}
 }
@@ -377,14 +378,14 @@ func TestVerifyMissingParent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateInvocation: %v", err)
 	}
-	res := Verify(hop, inv, config)
+	res := Verify(context.Background(), hop, inv, config)
 	if res.OK || res.Error.Code != CodeProofCacheMiss {
 		t.Errorf("code = %v, want O004 (OK=%v)", res.Error, res.OK)
 	}
 }
 
 func TestVerifyNoInvocation(t *testing.T) {
-	res := Verify(nil, nil, &VerifierConfig{})
+	res := Verify(context.Background(), nil, nil, &VerifierConfig{})
 	if res.OK || res.Error.Code != CodePoPFailed {
 		t.Errorf("code = %v, want PoP failed", res.Error)
 	}
@@ -395,7 +396,7 @@ func TestVerifyNoInvocation(t *testing.T) {
 func TestVerifyAuditsDenial(t *testing.T) {
 	now := time.Now().Unix()
 	f := restrictChain(t, now-100, now-3600) // expired chain
-	res := Verify(nil, f.invoke(t), f.config)
+	res := Verify(context.Background(), nil, f.invoke(t), f.config)
 	if res.OK || res.Error.Code != CodeExpired {
 		t.Fatalf("want expired denial, got OK=%v err=%v", res.OK, res.Error)
 	}
@@ -417,7 +418,7 @@ func TestVerifyRejectsOBO(t *testing.T) {
 	f := freshChain(t)
 	inv := f.invoke(t)
 	inv.OBO = &OnBehalfOf{Principal: "did:key:zPrincipal"}
-	res := Verify(nil, inv, f.config)
+	res := Verify(context.Background(), nil, inv, f.config)
 	if res.OK || res.Error.Code != CodePoPFailed {
 		t.Errorf("code = %v, want V014 PoP (OK=%v)", res.Error, res.OK)
 	}
@@ -430,14 +431,14 @@ func TestVerifyRejectsPreStartInvocation(t *testing.T) {
 	inv := f.invoke(t)
 
 	f.config.StartTime = time.Now().Unix() + 100 // boot "after" the invocation
-	if res := Verify(nil, inv, f.config); res.OK || res.Error.Code != CodePoPFailed {
+	if res := Verify(context.Background(), nil, inv, f.config); res.OK || res.Error.Code != CodePoPFailed {
 		t.Errorf("pre-start code = %v, want V014 PoP (OK=%v)", res.Error, res.OK)
 	}
 
 	// A boot time preceding the invocation lets it through (nonce reset to be safe).
 	f.config.StartTime = inv.Iat - 10
 	f.config.NonceCache = NewMemoryNonceCache()
-	if res := Verify(nil, inv, f.config); !res.OK {
+	if res := Verify(context.Background(), nil, inv, f.config); !res.OK {
 		t.Errorf("post-start verify failed: %v", res.Error)
 	}
 }
@@ -445,7 +446,7 @@ func TestVerifyRejectsPreStartInvocation(t *testing.T) {
 // loopStore returns a self-referential RESTRICT block for any CID.
 type loopStore struct{}
 
-func (loopStore) Get(cid string) ([]byte, error) {
-	return []byte(`{"typ":"aitp/cav/1","iss":"did:key:zA","aud":"did:key:zB","prf":"` + cid +
+func (loopStore) Get(_ context.Context, cid string) ([]byte, error) {
+	return []byte(`{"typ":"adtp/cav/1","iss":"did:key:zA","aud":"did:key:zB","prf":"` + cid +
 		`","nbf":1,"exp":2,"dl":1,"cav":[{"type":"time_window","start":1,"end":2}],"sig":"AA"}`), nil
 }

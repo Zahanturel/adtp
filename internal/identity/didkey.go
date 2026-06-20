@@ -1,8 +1,8 @@
-// Package identity implements AITP agent identity: did:key generation,
+// Package identity implements ADTP agent identity: did:key generation,
 // parsing, and resolution over Ed25519 keys, plus key storage.
 //
 // A did:key encodes a public key directly in the identifier, so resolution is a
-// purely local, offline operation — no network, no registry. AITP uses did:key
+// purely local, offline operation — no network, no registry. ADTP uses did:key
 // for agents (short-lived leaves) and did:web with pinned root keys for
 // organizations (specification Section 15.1; implemented in a later phase).
 package identity
@@ -42,7 +42,7 @@ var (
 func GenerateDID() (string, ed25519.PrivateKey, error) {
 	pub, priv, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
-		return "", nil, fmt.Errorf("aitp/identity: generate key: %w", err)
+		return "", nil, fmt.Errorf("adtp/identity: generate key: %w", err)
 	}
 	return EncodeDID(pub), priv, nil
 }
@@ -63,24 +63,24 @@ func EncodeDID(pub ed25519.PublicKey) string {
 func ParseDID(did string) (ed25519.PublicKey, error) {
 	rest, ok := strings.CutPrefix(did, didKeyPrefix)
 	if !ok {
-		return nil, fmt.Errorf("aitp/identity: %w: %q has no %q prefix", ErrUnsupportedDIDMethod, did, didKeyPrefix)
+		return nil, fmt.Errorf("adtp/identity: %w: %q has no %q prefix", ErrUnsupportedDIDMethod, did, didKeyPrefix)
 	}
 	multibase, ok := strings.CutPrefix(rest, base58BTCPrefix)
 	if !ok {
-		return nil, fmt.Errorf("aitp/identity: %w: missing 'z' base58btc multibase prefix", ErrMalformedDID)
+		return nil, fmt.Errorf("adtp/identity: %w: missing 'z' base58btc multibase prefix", ErrMalformedDID)
 	}
 
 	decoded, err := base58Decode(multibase)
 	if err != nil {
-		return nil, fmt.Errorf("aitp/identity: %w: %v", ErrMalformedDID, err)
+		return nil, fmt.Errorf("adtp/identity: %w: %v", ErrMalformedDID, err)
 	}
 
 	wantLen := len(ed25519MulticodecPrefix) + ed25519.PublicKeySize
 	if len(decoded) != wantLen {
-		return nil, fmt.Errorf("aitp/identity: %w: decoded %d bytes, want %d", ErrMalformedDID, len(decoded), wantLen)
+		return nil, fmt.Errorf("adtp/identity: %w: decoded %d bytes, want %d", ErrMalformedDID, len(decoded), wantLen)
 	}
 	if !bytes.Equal(decoded[:len(ed25519MulticodecPrefix)], ed25519MulticodecPrefix) {
-		return nil, fmt.Errorf("aitp/identity: %w: multicodec is not Ed25519 (0xed 0x01)", ErrMalformedDID)
+		return nil, fmt.Errorf("adtp/identity: %w: multicodec is not Ed25519 (0xed 0x01)", ErrMalformedDID)
 	}
 
 	pub := make(ed25519.PublicKey, ed25519.PublicKeySize)

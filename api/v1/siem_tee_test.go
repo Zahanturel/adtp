@@ -4,8 +4,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/adtp/adtp/internal/audit"
-	"github.com/adtp/adtp/store/memory"
+	"github.com/Zahanturel/adtp/internal/audit"
+	"github.com/Zahanturel/adtp/store/memory"
 )
 
 type recordingExporter struct {

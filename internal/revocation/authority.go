@@ -1,4 +1,4 @@
-// Package revocation implements the AITP revocation protocol (specification
+// Package revocation implements the ADTP revocation protocol (specification
 // Section 13): the authority model, signed entries and lists, the cache the
 // verifier consults, the explicit COMPROMISED cascade, and reconciliation.
 package revocation
@@ -85,13 +85,13 @@ var authorityRank = map[RevocationAuthority]int{
 func ValidateAuthority(authority RevocationAuthority, status RevocationStatus, scope RevocationScope) error {
 	statuses, ok := authorityStatuses[authority]
 	if !ok {
-		return fmt.Errorf("aitp/revocation: %w: %q", ErrUnknownAuthority, authority)
+		return fmt.Errorf("adtp/revocation: %w: %q", ErrUnknownAuthority, authority)
 	}
 	if _, ok := statuses[status]; !ok {
-		return fmt.Errorf("aitp/revocation: %w: %s may not set %s", ErrStatusNotPermitted, authority, status)
+		return fmt.Errorf("adtp/revocation: %w: %s may not set %s", ErrStatusNotPermitted, authority, status)
 	}
 	if _, ok := authorityScopes[authority][scope]; !ok {
-		return fmt.Errorf("aitp/revocation: %w: %s may not use %s scope", ErrScopeNotPermitted, authority, scope)
+		return fmt.Errorf("adtp/revocation: %w: %s may not use %s scope", ErrScopeNotPermitted, authority, scope)
 	}
 	return nil
 }
@@ -102,14 +102,14 @@ func ValidateAuthority(authority RevocationAuthority, status RevocationStatus, s
 func ValidateReinstatement(reinstater, suspender RevocationAuthority) error {
 	rRank, ok := authorityRank[reinstater]
 	if !ok {
-		return fmt.Errorf("aitp/revocation: %w: %q", ErrUnknownAuthority, reinstater)
+		return fmt.Errorf("adtp/revocation: %w: %q", ErrUnknownAuthority, reinstater)
 	}
 	sRank, ok := authorityRank[suspender]
 	if !ok {
-		return fmt.Errorf("aitp/revocation: %w: %q", ErrUnknownAuthority, suspender)
+		return fmt.Errorf("adtp/revocation: %w: %q", ErrUnknownAuthority, suspender)
 	}
 	if rRank < sRank {
-		return fmt.Errorf("aitp/revocation: %w: %s < %s", ErrInsufficientAuthority, reinstater, suspender)
+		return fmt.Errorf("adtp/revocation: %w: %s < %s", ErrInsufficientAuthority, reinstater, suspender)
 	}
 	return nil
 }

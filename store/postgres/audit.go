@@ -10,7 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/adtp/adtp/internal/audit"
+	"github.com/Zahanturel/adtp/internal/audit"
 )
 
 // auditChainLockKey is the fixed advisory-lock key that serializes audit
@@ -32,24 +32,24 @@ func (l *postgresAuditLog) Append(entry audit.AuditEntry) error {
 	ctx := context.Background()
 	tx, err := l.pool.Begin(ctx)
 	if err != nil {
-		return fmt.Errorf("aitp/store/postgres: audit begin: %w", err)
+		return fmt.Errorf("adtp/store/postgres: audit begin: %w", err)
 	}
 	defer tx.Rollback(ctx)
 
 	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, auditChainLockKey); err != nil {
-		return fmt.Errorf("aitp/store/postgres: audit lock: %w", err)
+		return fmt.Errorf("adtp/store/postgres: audit lock: %w", err)
 	}
 
 	var seq int64
 	if err := tx.QueryRow(ctx, `SELECT COALESCE(MAX(seq), 0) FROM audit_log`).Scan(&seq); err != nil {
-		return fmt.Errorf("aitp/store/postgres: audit seq: %w", err)
+		return fmt.Errorf("adtp/store/postgres: audit seq: %w", err)
 	}
 	seq++
 
 	var prevHash string
 	err = tx.QueryRow(ctx, `SELECT entry_hash FROM audit_log ORDER BY seq DESC LIMIT 1`).Scan(&prevHash)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-		return fmt.Errorf("aitp/store/postgres: audit prev: %w", err)
+		return fmt.Errorf("adtp/store/postgres: audit prev: %w", err)
 	}
 
 	entry.Seq = seq
@@ -71,7 +71,7 @@ func (l *postgresAuditLog) Append(entry audit.AuditEntry) error {
 
 	payloadJSON, err := json.Marshal(entry.Payload)
 	if err != nil {
-		return fmt.Errorf("aitp/store/postgres: audit payload: %w", err)
+		return fmt.Errorf("adtp/store/postgres: audit payload: %w", err)
 	}
 
 	if _, err := tx.Exec(ctx,
@@ -79,7 +79,7 @@ func (l *postgresAuditLog) Append(entry audit.AuditEntry) error {
 		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
 		entry.Seq, entry.EntryID, entry.Ts, entry.EventType, entry.AgentID, entry.CredCID,
 		entry.ChainHash, string(payloadJSON), entry.PrevHash, entry.EntryHash); err != nil {
-		return fmt.Errorf("aitp/store/postgres: audit insert: %w", err)
+		return fmt.Errorf("adtp/store/postgres: audit insert: %w", err)
 	}
 	return tx.Commit(ctx)
 }
@@ -105,7 +105,7 @@ func (l *postgresAuditLog) Query(filter audit.AuditFilter) ([]audit.AuditEntry, 
 
 	rows, err := l.pool.Query(context.Background(), q, args...)
 	if err != nil {
-		return nil, fmt.Errorf("aitp/store/postgres: audit query: %w", err)
+		return nil, fmt.Errorf("adtp/store/postgres: audit query: %w", err)
 	}
 	defer rows.Close()
 
@@ -133,7 +133,7 @@ func (l *postgresAuditLog) VerifyChain() error {
 		        COALESCE(chain_hash,''), payload, prev_hash, entry_hash
 		 FROM audit_log ORDER BY seq`)
 	if err != nil {
-		return fmt.Errorf("aitp/store/postgres: audit verify: %w", err)
+		return fmt.Errorf("adtp/store/postgres: audit verify: %w", err)
 	}
 	defer rows.Close()
 
@@ -154,7 +154,7 @@ func (l *postgresAuditLog) VerifyChain() error {
 			return err
 		}
 		if prevHash != prev {
-			return fmt.Errorf("aitp/store/postgres: %w: seq %d prev_hash break", audit.ErrChainTampered, seq)
+			return fmt.Errorf("adtp/store/postgres: %w: seq %d prev_hash break", audit.ErrChainTampered, seq)
 		}
 		var payload map[string]any
 		if err := json.Unmarshal(payloadJSON, &payload); err != nil {
@@ -165,7 +165,7 @@ func (l *postgresAuditLog) VerifyChain() error {
 			return err
 		}
 		if hash != entryHash {
-			return fmt.Errorf("aitp/store/postgres: %w: seq %d hash mismatch", audit.ErrChainTampered, seq)
+			return fmt.Errorf("adtp/store/postgres: %w: seq %d hash mismatch", audit.ErrChainTampered, seq)
 		}
 		prev = entryHash
 	}

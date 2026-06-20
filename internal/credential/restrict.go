@@ -6,11 +6,11 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/adtp/adtp/internal/signing"
+	"github.com/Zahanturel/adtp/internal/signing"
 )
 
 // RestrictBlockTyp is the typ tag of a RESTRICT attenuation block (SD-1).
-const RestrictBlockTyp = "aitp/cav/1"
+const RestrictBlockTyp = "adtp/cav/1"
 
 // MaxCaveatsPerBlock bounds the caveat list of a single block (Section 7.9).
 const MaxCaveatsPerBlock = 50
@@ -74,32 +74,32 @@ type DelegationParent struct {
 // JCS form including the signature, over which the CID is computed per SD-5).
 func CreateRestrictBlock(parent DelegationParent, audDID string, childDL int, caveats Constraints, signerKey ed25519.PrivateKey) (*RestrictBlock, []byte, error) {
 	if len(signerKey) != ed25519.PrivateKeySize {
-		return nil, nil, fmt.Errorf("aitp/credential: %w", ErrInvalidKey)
+		return nil, nil, fmt.Errorf("adtp/credential: %w", ErrInvalidKey)
 	}
 	if parent.CID == "" || parent.Aud == "" {
-		return nil, nil, fmt.Errorf("aitp/credential: %w: parent CID and audience", ErrMissingField)
+		return nil, nil, fmt.Errorf("adtp/credential: %w: parent CID and audience", ErrMissingField)
 	}
 	if audDID == "" {
-		return nil, nil, fmt.Errorf("aitp/credential: %w: audience", ErrMissingField)
+		return nil, nil, fmt.Errorf("adtp/credential: %w: audience", ErrMissingField)
 	}
 	if len(caveats) == 0 {
-		return nil, nil, fmt.Errorf("aitp/credential: %w", ErrNoCaveats)
+		return nil, nil, fmt.Errorf("adtp/credential: %w", ErrNoCaveats)
 	}
 	if len(caveats) > MaxCaveatsPerBlock {
-		return nil, nil, fmt.Errorf("aitp/credential: %w: %d > %d", ErrTooManyCaveats, len(caveats), MaxCaveatsPerBlock)
+		return nil, nil, fmt.Errorf("adtp/credential: %w: %d > %d", ErrTooManyCaveats, len(caveats), MaxCaveatsPerBlock)
 	}
 	if childDL >= parent.DL {
-		return nil, nil, fmt.Errorf("aitp/credential: %w: child dl %d not below parent dl %d", ErrDepthNotReduced, childDL, parent.DL)
+		return nil, nil, fmt.Errorf("adtp/credential: %w: child dl %d not below parent dl %d", ErrDepthNotReduced, childDL, parent.DL)
 	}
 	if childDL < 0 {
-		return nil, nil, fmt.Errorf("aitp/credential: %w: negative dl", ErrDepthNotReduced)
+		return nil, nil, fmt.Errorf("adtp/credential: %w: negative dl", ErrDepthNotReduced)
 	}
 	for i, c := range caveats {
 		if c == nil {
-			return nil, nil, fmt.Errorf("aitp/credential: %w: nil caveat at %d", ErrInvalidConstraint, i)
+			return nil, nil, fmt.Errorf("adtp/credential: %w: nil caveat at %d", ErrInvalidConstraint, i)
 		}
 		if err := c.Validate(); err != nil {
-			return nil, nil, fmt.Errorf("aitp/credential: caveat %d (%s): %w", i, c.Kind(), err)
+			return nil, nil, fmt.Errorf("adtp/credential: caveat %d (%s): %w", i, c.Kind(), err)
 		}
 	}
 
@@ -116,13 +116,13 @@ func CreateRestrictBlock(parent DelegationParent, audDID string, childDL int, ca
 
 	sig, err := signing.Sign(block, signerKey)
 	if err != nil {
-		return nil, nil, fmt.Errorf("aitp/credential: sign block: %w", err)
+		return nil, nil, fmt.Errorf("adtp/credential: sign block: %w", err)
 	}
 	block.Sig = signing.EncodeSignature(sig)
 
 	raw, err := signing.CanonicalizeValue(block)
 	if err != nil {
-		return nil, nil, fmt.Errorf("aitp/credential: canonicalize block: %w", err)
+		return nil, nil, fmt.Errorf("adtp/credential: canonicalize block: %w", err)
 	}
 	return block, raw, nil
 }
@@ -132,20 +132,20 @@ func CreateRestrictBlock(parent DelegationParent, audDID string, childDL int, ca
 // signature; use Verify for that.
 func ParseRestrictBlock(raw []byte) (*RestrictBlock, error) {
 	if err := signing.ValidateIJSON(raw); err != nil {
-		return nil, fmt.Errorf("aitp/credential: %w: %v", ErrNotRestrictBlock, err)
+		return nil, fmt.Errorf("adtp/credential: %w: %v", ErrNotRestrictBlock, err)
 	}
 	var block RestrictBlock
 	if err := json.Unmarshal(raw, &block); err != nil {
-		return nil, fmt.Errorf("aitp/credential: %w: %v", ErrNotRestrictBlock, err)
+		return nil, fmt.Errorf("adtp/credential: %w: %v", ErrNotRestrictBlock, err)
 	}
 	if block.Typ != RestrictBlockTyp {
-		return nil, fmt.Errorf("aitp/credential: %w: typ %q", ErrNotRestrictBlock, block.Typ)
+		return nil, fmt.Errorf("adtp/credential: %w: typ %q", ErrNotRestrictBlock, block.Typ)
 	}
 	if block.Iss == "" || block.Aud == "" || block.Prf == "" {
-		return nil, fmt.Errorf("aitp/credential: %w: iss, aud, and prf are required", ErrMissingField)
+		return nil, fmt.Errorf("adtp/credential: %w: iss, aud, and prf are required", ErrMissingField)
 	}
 	if block.Sig == "" {
-		return nil, fmt.Errorf("aitp/credential: %w: sig", ErrMissingField)
+		return nil, fmt.Errorf("adtp/credential: %w: sig", ErrMissingField)
 	}
 	return &block, nil
 }
@@ -180,22 +180,22 @@ func (b *RestrictBlock) CID() (string, error) {
 // one caveat is present.
 func (b *RestrictBlock) ValidateAgainstParent(parent DelegationParent) error {
 	if b.Iss != parent.Aud {
-		return fmt.Errorf("aitp/credential: %w: iss %q, parent aud %q", ErrIssuerMismatch, b.Iss, parent.Aud)
+		return fmt.Errorf("adtp/credential: %w: iss %q, parent aud %q", ErrIssuerMismatch, b.Iss, parent.Aud)
 	}
 	if b.Prf != parent.CID {
-		return fmt.Errorf("aitp/credential: %w: prf %q, parent CID %q", ErrNotRestrictBlock, b.Prf, parent.CID)
+		return fmt.Errorf("adtp/credential: %w: prf %q, parent CID %q", ErrNotRestrictBlock, b.Prf, parent.CID)
 	}
 	if b.Exp > parent.Exp {
-		return fmt.Errorf("aitp/credential: %w: %d > %d", ErrExpiryEscalation, b.Exp, parent.Exp)
+		return fmt.Errorf("adtp/credential: %w: %d > %d", ErrExpiryEscalation, b.Exp, parent.Exp)
 	}
 	if b.Nbf < parent.Nbf {
-		return fmt.Errorf("aitp/credential: %w: %d < %d", ErrNotBeforeRegression, b.Nbf, parent.Nbf)
+		return fmt.Errorf("adtp/credential: %w: %d < %d", ErrNotBeforeRegression, b.Nbf, parent.Nbf)
 	}
 	if b.DL >= parent.DL {
-		return fmt.Errorf("aitp/credential: %w: %d not below %d", ErrDepthNotReduced, b.DL, parent.DL)
+		return fmt.Errorf("adtp/credential: %w: %d not below %d", ErrDepthNotReduced, b.DL, parent.DL)
 	}
 	if len(b.Cav) == 0 {
-		return fmt.Errorf("aitp/credential: %w", ErrNoCaveats)
+		return fmt.Errorf("adtp/credential: %w", ErrNoCaveats)
 	}
 	return nil
 }

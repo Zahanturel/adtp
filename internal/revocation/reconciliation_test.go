@@ -1,15 +1,17 @@
 package revocation
 
 import (
+	"context"
 	"testing"
 
-	"github.com/adtp/adtp/internal/audit"
-	"github.com/adtp/adtp/internal/delegation"
+	"github.com/Zahanturel/adtp/internal/audit"
+	"github.com/Zahanturel/adtp/internal/delegation"
 )
 
 func registerCredential(t *testing.T, store *testCredStore, index *MemoryRegistrationIndex, cid string) {
 	t.Helper()
-	chain, err := delegation.BuildChain(cid, store, delegation.HardMaxDepth)
+	ctx := context.Background()
+	chain, err := delegation.BuildChain(ctx, cid, store, delegation.HardMaxDepth)
 	if err != nil {
 		t.Fatalf("BuildChain(%s): %v", cid, err)
 	}
@@ -17,7 +19,7 @@ func registerCredential(t *testing.T, store *testCredStore, index *MemoryRegistr
 	for _, e := range chain.Elements {
 		chainCIDs = append(chainCIDs, e.CID)
 	}
-	index.Register(cid, chainCIDs)
+	index.Register(ctx, cid, chainCIDs)
 }
 
 func TestReconcileNoRepairs(t *testing.T) {
@@ -27,7 +29,7 @@ func TestReconcileNoRepairs(t *testing.T) {
 		registerCredential(t, store, index, cid)
 	}
 
-	report, err := Reconcile(store, index, audit.NewMemoryAuditLog())
+	report, err := Reconcile(context.Background(), store, index, audit.NewMemoryAuditLog())
 	if err != nil {
 		t.Fatalf("Reconcile: %v", err)
 	}
@@ -47,19 +49,19 @@ func TestReconcileBackfillsMissing(t *testing.T) {
 	registerCredential(t, store, index, midCID)
 
 	log := audit.NewMemoryAuditLog()
-	report, err := Reconcile(store, index, log)
+	report, err := Reconcile(context.Background(), store, index, log)
 	if err != nil {
 		t.Fatalf("Reconcile: %v", err)
 	}
 	if report.RepairsApplied == 0 {
 		t.Errorf("expected repairs for the unregistered leaf")
 	}
-	if !index.Contains(leafCID, midCID) || !index.Contains(leafCID, rootCID) {
+	if !index.Contains(context.Background(), leafCID, midCID) || !index.Contains(context.Background(), leafCID, rootCID) {
 		t.Errorf("leaf chain links not backfilled")
 	}
 
 	// Reconciliation is idempotent: a second pass repairs nothing.
-	report2, err := Reconcile(store, index, log)
+	report2, err := Reconcile(context.Background(), store, index, log)
 	if err != nil {
 		t.Fatalf("second Reconcile: %v", err)
 	}

@@ -1,27 +1,28 @@
 package revocation
 
 import (
+	"context"
 	"crypto/ed25519"
 	"fmt"
 	"sort"
 	"sync"
 
-	"github.com/adtp/adtp/internal/audit"
-	"github.com/adtp/adtp/internal/identity"
+	"github.com/Zahanturel/adtp/internal/audit"
+	"github.com/Zahanturel/adtp/internal/identity"
 )
 
 // RegistrationIndex finds the credentials whose delegation chain contains a
 // given CID — the chain_contains_cid relation that makes cascade complete
 // (Section 13.6).
 type RegistrationIndex interface {
-	FindDescendants(cid string) ([]string, error)
+	FindDescendants(ctx context.Context, cid string) ([]string, error)
 }
 
 // RevocationService accepts new revocation entries and reports per-subject
 // sequence state.
 type RevocationService interface {
-	Revoke(entry RevocationEntry) error
-	CurrentSeq(subject string) int64
+	Revoke(ctx context.Context, entry RevocationEntry) error
+	CurrentSeq(ctx context.Context, subject string) (int64, error)
 }
 
 // EmergencyChannel propagates high-urgency revocations out of band (Section
@@ -44,6 +45,7 @@ type CascadeReport struct {
 // the batch to the emergency channel, and audits the event. The signer's DID is
 // recorded as the platform authority.
 func ExecuteCascade(
+	ctx context.Context,
 	compromisedCID string,
 	registrationIndex RegistrationIndex,
 	revocationService RevocationService,
@@ -52,19 +54,23 @@ func ExecuteCascade(
 	signerKey ed25519.PrivateKey,
 ) (*CascadeReport, error) {
 	if len(signerKey) != ed25519.PrivateKeySize {
-		return nil, fmt.Errorf("aitp/revocation: %w", ErrInvalidKey)
+		return nil, fmt.Errorf("adtp/revocation: %w", ErrInvalidKey)
 	}
 	authorityDID := identity.EncodeDID(signerKey.Public().(ed25519.PublicKey))
 	auth := RevocationAuth{DID: authorityDID, Basis: AuthPlatform, Proof: compromisedCID}
 
 	// 1. Primary COMPROMISED entry (subtree scope triggers the cascade).
+	seq, err := revocationService.CurrentSeq(ctx, compromisedCID)
+	if err != nil {
+		return nil, fmt.Errorf("adtp/revocation: current seq: %w", err)
+	}
 	primary, err := CreateRevocationEntry(
 		RevocationSubject{CID: compromisedCID}, ScopeSubtree, StatusCompromised,
-		auth, revocationService.CurrentSeq(compromisedCID)+1, "", signerKey)
+		auth, seq+1, "", signerKey)
 	if err != nil {
 		return nil, err
 	}
-	if err := revocationService.Revoke(*primary); err != nil {
+	if err := revocationService.Revoke(ctx, *primary); err != nil {
 		return nil, err
 	}
 	if err := appendAudit(auditLog, audit.EventRevocationPosted, compromisedCID, map[string]any{
@@ -74,21 +80,25 @@ func ExecuteCascade(
 	}
 
 	// 2. Enumerate descendants.
-	descendants, err := registrationIndex.FindDescendants(compromisedCID)
+	descendants, err := registrationIndex.FindDescendants(ctx, compromisedCID)
 	if err != nil {
-		return nil, fmt.Errorf("aitp/revocation: find descendants: %w", err)
+		return nil, fmt.Errorf("adtp/revocation: find descendants: %w", err)
 	}
 
 	// 3. CASCADE entry per descendant (Authority.Proof links to the origin).
 	cascadeEntries := make([]RevocationEntry, 0, len(descendants))
 	for _, d := range descendants {
+		dSeq, err := revocationService.CurrentSeq(ctx, d)
+		if err != nil {
+			return nil, fmt.Errorf("adtp/revocation: current seq for descendant %s: %w", d, err)
+		}
 		entry, err := CreateRevocationEntry(
 			RevocationSubject{CID: d}, ScopeCredential, StatusCascade,
-			auth, revocationService.CurrentSeq(d)+1, "", signerKey)
+			auth, dSeq+1, "", signerKey)
 		if err != nil {
 			return nil, err
 		}
-		if err := revocationService.Revoke(*entry); err != nil {
+		if err := revocationService.Revoke(ctx, *entry); err != nil {
 			return nil, err
 		}
 		cascadeEntries = append(cascadeEntries, *entry)
@@ -98,7 +108,7 @@ func ExecuteCascade(
 	if emergency != nil {
 		batch := append([]RevocationEntry{*primary}, cascadeEntries...)
 		if err := emergency.Push(batch); err != nil {
-			return nil, fmt.Errorf("aitp/revocation: emergency push: %w", err)
+			return nil, fmt.Errorf("adtp/revocation: emergency push: %w", err)
 		}
 	}
 
@@ -139,7 +149,7 @@ func NewMemoryRegistrationIndex() *MemoryRegistrationIndex {
 // Register records that credentialCID's chain contains each of chainCIDs. The
 // in-memory index never fails; the error return matches the RegistrationStore
 // contract that durable backends need.
-func (r *MemoryRegistrationIndex) Register(credentialCID string, chainCIDs []string) error {
+func (r *MemoryRegistrationIndex) Register(_ context.Context, credentialCID string, chainCIDs []string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	for _, c := range chainCIDs {
@@ -153,7 +163,7 @@ func (r *MemoryRegistrationIndex) Register(credentialCID string, chainCIDs []str
 
 // FindDescendants returns the credentials whose chain contains cid, excluding
 // cid itself, in deterministic order.
-func (r *MemoryRegistrationIndex) FindDescendants(cid string) ([]string, error) {
+func (r *MemoryRegistrationIndex) FindDescendants(_ context.Context, cid string) ([]string, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	var out []string

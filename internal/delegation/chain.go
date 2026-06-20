@@ -1,14 +1,15 @@
-// Package delegation builds and issues AITP delegation chains: walking prf
+// Package delegation builds and issues ADTP delegation chains: walking prf
 // links from a leaf to its root, and minting RESTRICT blocks and RESTATE hops.
 package delegation
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"sync"
 
-	"github.com/adtp/adtp/internal/credential"
+	"github.com/Zahanturel/adtp/internal/credential"
 )
 
 // Chain construction limits (specification Sections 8, 7.9, 11).
@@ -46,7 +47,7 @@ var (
 // exact serialized form the CID was computed over (JWS compact for UCANs, JCS
 // for blocks).
 type ProofStore interface {
-	Get(cid string) ([]byte, error)
+	Get(ctx context.Context, cid string) ([]byte, error)
 }
 
 // ChainElement is one credential in a chain. Exactly one of Token or Block is
@@ -76,7 +77,7 @@ func (c *Chain) Root() ChainElement { return c.Elements[len(c.Elements)-1] }
 // links. It rejects cycles (before any signature work), over-deep and over-wide
 // chains, branching, CID-mismatched proofs, and illegal mode mixing. It does not
 // verify signatures or temporal validity; those are later verification steps.
-func BuildChain(leafCID string, store ProofStore, maxDepth int) (*Chain, error) {
+func BuildChain(ctx context.Context, leafCID string, store ProofStore, maxDepth int) (*Chain, error) {
 	if maxDepth <= 0 {
 		maxDepth = DefaultMaxDepth
 	}
@@ -91,16 +92,16 @@ func BuildChain(leafCID string, store ProofStore, maxDepth int) (*Chain, error) 
 	cid := leafCID
 	for {
 		if cid == "" {
-			return nil, fmt.Errorf("aitp/delegation: %w: empty CID reference", ErrChainBroken)
+			return nil, fmt.Errorf("adtp/delegation: %w: empty CID reference", ErrChainBroken)
 		}
 		if _, dup := seen[cid]; dup {
-			return nil, fmt.Errorf("aitp/delegation: %w: %s", ErrCircularChain, cid)
+			return nil, fmt.Errorf("adtp/delegation: %w: %s", ErrCircularChain, cid)
 		}
 		seen[cid] = struct{}{}
 
-		raw, err := store.Get(cid)
+		raw, err := store.Get(ctx, cid)
 		if err != nil {
-			return nil, fmt.Errorf("aitp/delegation: %w: %s: %v", ErrProofNotFound, cid, err)
+			return nil, fmt.Errorf("adtp/delegation: %w: %s: %v", ErrProofNotFound, cid, err)
 		}
 
 		// SD-5 / Section 10.2: the verifier MUST verify the CID over the fetched
@@ -108,7 +109,7 @@ func BuildChain(leafCID string, store ProofStore, maxDepth int) (*Chain, error) 
 		// mapping; a poisoned cache or dishonest CAS could substitute a different
 		// (but validly signed) credential under the requested CID.
 		if !credential.VerifyCID(raw, cid) {
-			return nil, fmt.Errorf("aitp/delegation: %w: %s", ErrCIDMismatch, cid)
+			return nil, fmt.Errorf("adtp/delegation: %w: %s", ErrCIDMismatch, cid)
 		}
 
 		elem, parentCID, weight, err := parseElement(raw, cid)
@@ -119,10 +120,10 @@ func BuildChain(leafCID string, store ProofStore, maxDepth int) (*Chain, error) 
 
 		totalCapsCaveats += weight
 		if totalCapsCaveats > MaxChainCapsCaveats {
-			return nil, fmt.Errorf("aitp/delegation: %w: %d", ErrChainTooWide, totalCapsCaveats)
+			return nil, fmt.Errorf("adtp/delegation: %w: %d", ErrChainTooWide, totalCapsCaveats)
 		}
 		if len(elements)-1 > maxDepth {
-			return nil, fmt.Errorf("aitp/delegation: %w: %d > %d", ErrChainTooDeep, len(elements)-1, maxDepth)
+			return nil, fmt.Errorf("adtp/delegation: %w: %d > %d", ErrChainTooDeep, len(elements)-1, maxDepth)
 		}
 
 		if elem.IsRoot {
@@ -143,14 +144,14 @@ func parseElement(raw []byte, cid string) (ChainElement, string, int, error) {
 	if trimmed := bytes.TrimSpace(raw); len(trimmed) > 0 && trimmed[0] == '{' {
 		block, err := credential.ParseRestrictBlock(raw)
 		if err != nil {
-			return ChainElement{}, "", 0, fmt.Errorf("aitp/delegation: %w: %v", ErrChainBroken, err)
+			return ChainElement{}, "", 0, fmt.Errorf("adtp/delegation: %w: %v", ErrChainBroken, err)
 		}
 		return ChainElement{Block: block, CID: cid, Mode: ModeRestrict}, block.Prf, len(block.Cav), nil
 	}
 
 	token, err := credential.ParseUCAN(string(raw))
 	if err != nil {
-		return ChainElement{}, "", 0, fmt.Errorf("aitp/delegation: %w: %v", ErrChainBroken, err)
+		return ChainElement{}, "", 0, fmt.Errorf("adtp/delegation: %w: %v", ErrChainBroken, err)
 	}
 	weight := len(token.Payload.Att)
 	for _, c := range token.Payload.Att {
@@ -163,7 +164,7 @@ func parseElement(raw []byte, cid string) (ChainElement, string, int, error) {
 	case 1:
 		return ChainElement{Token: token, CID: cid, Mode: ModeRestate}, token.Payload.Prf[0], weight, nil
 	default:
-		return ChainElement{}, "", 0, fmt.Errorf("aitp/delegation: %w: %d proofs", ErrBranchingUnsupported, len(token.Payload.Prf))
+		return ChainElement{}, "", 0, fmt.Errorf("adtp/delegation: %w: %d proofs", ErrBranchingUnsupported, len(token.Payload.Prf))
 	}
 }
 
@@ -177,7 +178,7 @@ func checkModeMixing(elements []ChainElement) error {
 			restrictSeen = true
 		case ModeRestate:
 			if restrictSeen {
-				return fmt.Errorf("aitp/delegation: %w", ErrModeMixing)
+				return fmt.Errorf("adtp/delegation: %w", ErrModeMixing)
 			}
 		}
 	}
@@ -210,19 +211,19 @@ func (s *MemoryProofStore) Put(raw []byte) string {
 // defense). It returns ErrCIDMismatch on a mismatch.
 func (s *MemoryProofStore) PutVerified(raw []byte, claimedCID string) error {
 	if credential.ComputeCID(raw) != claimedCID {
-		return fmt.Errorf("aitp/delegation: %w: %s", ErrCIDMismatch, claimedCID)
+		return fmt.Errorf("adtp/delegation: %w: %s", ErrCIDMismatch, claimedCID)
 	}
 	s.Put(raw)
 	return nil
 }
 
 // Get returns the bytes stored under cid, or ErrProofNotFound.
-func (s *MemoryProofStore) Get(cid string) ([]byte, error) {
+func (s *MemoryProofStore) Get(_ context.Context, cid string) ([]byte, error) {
 	s.mu.RLock()
 	raw, ok := s.m[cid]
 	s.mu.RUnlock()
 	if !ok {
-		return nil, fmt.Errorf("aitp/delegation: %w: %s", ErrProofNotFound, cid)
+		return nil, fmt.Errorf("adtp/delegation: %w: %s", ErrProofNotFound, cid)
 	}
 	return bytes.Clone(raw), nil
 }

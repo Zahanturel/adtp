@@ -1,24 +1,25 @@
 package revocation
 
 import (
+	"context"
 	"fmt"
 
-	"github.com/adtp/adtp/internal/audit"
-	"github.com/adtp/adtp/internal/delegation"
+	"github.com/Zahanturel/adtp/internal/audit"
+	"github.com/Zahanturel/adtp/internal/delegation"
 )
 
 // CredentialStore enumerates registered credentials and resolves their bytes.
 // Its Get method also satisfies delegation.ProofStore, so chains can be walked.
 type CredentialStore interface {
-	ListCredentials() ([]string, error)
-	Get(cid string) ([]byte, error)
+	ListCredentials(ctx context.Context) ([]string, error)
+	Get(ctx context.Context, cid string) ([]byte, error)
 }
 
 // RegistrationStore is a registration index that can be queried and repaired.
 type RegistrationStore interface {
-	FindDescendants(cid string) ([]string, error)
-	Register(credentialCID string, chainCIDs []string) error
-	Contains(credentialCID, chainCID string) bool
+	FindDescendants(ctx context.Context, cid string) ([]string, error)
+	Register(ctx context.Context, credentialCID string, chainCIDs []string) error
+	Contains(ctx context.Context, credentialCID, chainCID string) bool
 }
 
 // ReconciliationReport summarizes a reconciliation pass.
@@ -30,7 +31,7 @@ type ReconciliationReport struct {
 
 // Contains reports whether the index records that credentialCID's chain contains
 // chainCID.
-func (r *MemoryRegistrationIndex) Contains(credentialCID, chainCID string) bool {
+func (r *MemoryRegistrationIndex) Contains(_ context.Context, credentialCID, chainCID string) bool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	set, ok := r.index[chainCID]
@@ -46,25 +47,25 @@ func (r *MemoryRegistrationIndex) Contains(credentialCID, chainCID string) bool 
 // (Section 13.7). It is idempotent: a second pass over a repaired index applies
 // zero repairs. Re-running cascades for compromised subjects touched by repairs
 // is the caller's responsibility, since that requires the revocation service.
-func Reconcile(credStore CredentialStore, index RegistrationStore, auditLog audit.AuditLog) (*ReconciliationReport, error) {
-	cids, err := credStore.ListCredentials()
+func Reconcile(ctx context.Context, credStore CredentialStore, index RegistrationStore, auditLog audit.AuditLog) (*ReconciliationReport, error) {
+	cids, err := credStore.ListCredentials(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("aitp/revocation: list credentials: %w", err)
+		return nil, fmt.Errorf("adtp/revocation: list credentials: %w", err)
 	}
 
 	report := &ReconciliationReport{}
 	for _, cid := range cids {
 		report.CredentialsWalked++
-		chain, err := delegation.BuildChain(cid, credStore, delegation.HardMaxDepth)
+		chain, err := delegation.BuildChain(ctx, cid, credStore, delegation.HardMaxDepth)
 		if err != nil {
 			report.Errors++
 			continue
 		}
 		for _, element := range chain.Elements {
-			if index.Contains(cid, element.CID) {
+			if index.Contains(ctx, cid, element.CID) {
 				continue
 			}
-			if err := index.Register(cid, []string{element.CID}); err != nil {
+			if err := index.Register(ctx, cid, []string{element.CID}); err != nil {
 				report.Errors++
 				continue
 			}

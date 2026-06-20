@@ -1,4 +1,4 @@
-// Package credential implements AITP credentials: content identifiers (CIDs),
+// Package credential implements ADTP credentials: content identifiers (CIDs),
 // UCAN JWT creation and parsing, and capability/constraint definitions.
 package credential
 

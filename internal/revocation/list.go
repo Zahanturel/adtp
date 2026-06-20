@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/adtp/adtp/internal/signing"
+	"github.com/Zahanturel/adtp/internal/signing"
 )
 
 // RevocationListSchemaVersion is the supported list schema.
@@ -17,7 +17,7 @@ const RevocationListSchemaVersion = "1.0"
 // RevocationListTyp is the SD-1 typ tag of a revocation list. Like every other
 // signed object it carries a typ so a signature can never be reinterpreted as a
 // signature over a different object kind.
-const RevocationListTyp = "aitp/revlist/1"
+const RevocationListTyp = "adtp/revlist/1"
 
 // defaultListValidity is how long a freshly issued list is valid, in seconds.
 const defaultListValidity = 900
@@ -47,7 +47,7 @@ type RevocationList struct {
 // CreateRevocationList builds and SD-2-signs a revocation list.
 func CreateRevocationList(entries []RevocationEntry, issuerDID, prevHash string, seq int64, signerKey ed25519.PrivateKey) (*RevocationList, error) {
 	if len(signerKey) != ed25519.PrivateKeySize {
-		return nil, fmt.Errorf("aitp/revocation: %w", ErrInvalidKey)
+		return nil, fmt.Errorf("adtp/revocation: %w", ErrInvalidKey)
 	}
 	if entries == nil {
 		entries = []RevocationEntry{}
@@ -66,7 +66,7 @@ func CreateRevocationList(entries []RevocationEntry, issuerDID, prevHash string,
 	}
 	sig, err := signing.Sign(list, signerKey)
 	if err != nil {
-		return nil, fmt.Errorf("aitp/revocation: sign list: %w", err)
+		return nil, fmt.Errorf("adtp/revocation: sign list: %w", err)
 	}
 	list.Sig = signing.EncodeSignature(sig)
 	return list, nil
@@ -77,10 +77,10 @@ func CreateRevocationList(entries []RevocationEntry, issuerDID, prevHash string,
 // applied (see MemoryRevocationCache.UpdateFromList).
 func VerifyRevocationList(list *RevocationList, issuerPub ed25519.PublicKey) error {
 	if list.Typ != RevocationListTyp {
-		return fmt.Errorf("aitp/revocation: %w: typ %q", ErrNotRevocationList, list.Typ)
+		return fmt.Errorf("adtp/revocation: %w: typ %q", ErrNotRevocationList, list.Typ)
 	}
 	if list.SchemaVersion != RevocationListSchemaVersion {
-		return fmt.Errorf("aitp/revocation: %w: schema %q", ErrNotRevocationList, list.SchemaVersion)
+		return fmt.Errorf("adtp/revocation: %w: schema %q", ErrNotRevocationList, list.SchemaVersion)
 	}
 	sig, err := signing.DecodeSignature(list.Sig)
 	if err != nil {
@@ -94,7 +94,7 @@ func VerifyRevocationList(list *RevocationList, issuerPub ed25519.PublicKey) err
 func (l *RevocationList) Hash() (string, error) {
 	canonical, err := signing.CanonicalizeValue(l)
 	if err != nil {
-		return "", fmt.Errorf("aitp/revocation: hash list: %w", err)
+		return "", fmt.Errorf("adtp/revocation: hash list: %w", err)
 	}
 	sum := sha256.Sum256(canonical)
 	return hex.EncodeToString(sum[:]), nil

@@ -6,6 +6,7 @@
 package v1
 
 import (
+	"context"
 	"crypto/ed25519"
 	"encoding/base64"
 	"encoding/json"
@@ -15,16 +16,16 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/adtp/adtp/config"
-	"github.com/adtp/adtp/internal/audit"
-	"github.com/adtp/adtp/internal/credential"
-	"github.com/adtp/adtp/internal/delegation"
-	"github.com/adtp/adtp/internal/identity"
-	"github.com/adtp/adtp/internal/lifecycle"
-	"github.com/adtp/adtp/internal/revocation"
-	"github.com/adtp/adtp/internal/verify"
-	"github.com/adtp/adtp/pkg/adtp"
-	"github.com/adtp/adtp/store"
+	"github.com/Zahanturel/adtp/config"
+	"github.com/Zahanturel/adtp/internal/audit"
+	"github.com/Zahanturel/adtp/internal/credential"
+	"github.com/Zahanturel/adtp/internal/delegation"
+	"github.com/Zahanturel/adtp/internal/identity"
+	"github.com/Zahanturel/adtp/internal/lifecycle"
+	"github.com/Zahanturel/adtp/internal/revocation"
+	"github.com/Zahanturel/adtp/internal/verify"
+	"github.com/Zahanturel/adtp/pkg/adtp"
+	"github.com/Zahanturel/adtp/store"
 )
 
 // Service ties the storage backend, the platform identity, and the engine
@@ -173,7 +174,7 @@ func handleRegisterAgent(svc *Service) http.HandlerFunc {
 			writeErr(w, http.StatusInternalServerError, "", "lifecycle error")
 			return
 		}
-		if err := svc.Store.PutAgent(agent); err != nil {
+		if err := svc.Store.PutAgent(r.Context(), agent); err != nil {
 			writeErr(w, http.StatusInternalServerError, "", "could not persist agent")
 			return
 		}
@@ -200,7 +201,7 @@ func handleIssueCredential(svc *Service) http.HandlerFunc {
 			writeErr(w, http.StatusBadRequest, adtp.CodeMalformed, "capabilities and a positive exp_seconds are required")
 			return
 		}
-		if _, err := svc.Store.GetAgent(req.AgentDID); err != nil {
+		if _, err := svc.Store.GetAgent(r.Context(), req.AgentDID); err != nil {
 			writeErr(w, http.StatusNotFound, "", "agent is not registered")
 			return
 		}
@@ -214,12 +215,12 @@ func handleIssueCredential(svc *Service) http.HandlerFunc {
 			svc.failErr(w, http.StatusBadRequest, adtp.CodeMalformed, "invalid credential", err)
 			return
 		}
-		cid, err := svc.Store.PutCredential([]byte(token))
+		cid, err := svc.Store.PutCredential(r.Context(), []byte(token))
 		if err != nil {
 			writeErr(w, http.StatusInternalServerError, "", "could not store credential")
 			return
 		}
-		if err := svc.Store.Register(cid, []string{cid}); err != nil {
+		if err := svc.Store.Register(r.Context(), cid, []string{cid}); err != nil {
 			writeErr(w, http.StatusInternalServerError, "", "could not register credential")
 			return
 		}
@@ -240,7 +241,7 @@ func handleDelegate(svc *Service) http.HandlerFunc {
 			writeErr(w, http.StatusBadRequest, adtp.CodeMalformed, "parent_cid and audience_did are required")
 			return
 		}
-		parentRaw, err := svc.Store.Get(req.ParentCID)
+		parentRaw, err := svc.Store.Get(r.Context(), req.ParentCID)
 		if err != nil {
 			writeErr(w, http.StatusNotFound, "", "parent credential not found")
 			return
@@ -252,16 +253,16 @@ func handleDelegate(svc *Service) http.HandlerFunc {
 		}
 		switch mode {
 		case "restrict":
-			svc.delegateRestrict(w, req, parentRaw)
+			svc.delegateRestrict(r.Context(), w, req, parentRaw)
 		case "restate":
-			svc.delegateRestate(w, req, parentRaw)
+			svc.delegateRestate(r.Context(), w, req, parentRaw)
 		default:
 			writeErr(w, http.StatusBadRequest, adtp.CodeMalformed, "mode must be 'restrict' or 'restate'")
 		}
 	}
 }
 
-func (svc *Service) delegateRestrict(w http.ResponseWriter, req adtp.DelegateRequest, parentRaw []byte) {
+func (svc *Service) delegateRestrict(ctx context.Context, w http.ResponseWriter, req adtp.DelegateRequest, parentRaw []byte) {
 	parent, delegatorDID, err := parentRef(parentRaw, req.ParentCID)
 	if err != nil {
 		svc.failErr(w, http.StatusBadRequest, adtp.CodeDenied, "parent cannot delegate", err)
@@ -277,7 +278,7 @@ func (svc *Service) delegateRestrict(w http.ResponseWriter, req adtp.DelegateReq
 		svc.failErr(w, http.StatusBadRequest, adtp.CodeMalformed, "invalid delegation", err)
 		return
 	}
-	cid := svc.storeAndRegister(w, raw)
+	cid := svc.storeAndRegister(ctx, w, raw)
 	if cid == "" {
 		return
 	}
@@ -285,7 +286,7 @@ func (svc *Service) delegateRestrict(w http.ResponseWriter, req adtp.DelegateReq
 	writeJSON(w, http.StatusCreated, adtp.DelegateResponse{CID: cid, Raw: base64.RawURLEncoding.EncodeToString(raw)})
 }
 
-func (svc *Service) delegateRestate(w http.ResponseWriter, req adtp.DelegateRequest, parentRaw []byte) {
+func (svc *Service) delegateRestate(ctx context.Context, w http.ResponseWriter, req adtp.DelegateRequest, parentRaw []byte) {
 	u, err := asUCAN(parentRaw)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, adtp.CodeMalformed, "RESTATE requires a UCAN parent")
@@ -309,7 +310,7 @@ func (svc *Service) delegateRestate(w http.ResponseWriter, req adtp.DelegateRequ
 		svc.failErr(w, http.StatusBadRequest, adtp.CodeMalformed, "invalid delegation", err)
 		return
 	}
-	cid := svc.storeAndRegister(w, []byte(token))
+	cid := svc.storeAndRegister(ctx, w, []byte(token))
 	if cid == "" {
 		return
 	}
@@ -319,13 +320,13 @@ func (svc *Service) delegateRestate(w http.ResponseWriter, req adtp.DelegateRequ
 
 // storeAndRegister stores a delegation, registers its chain, and audits it,
 // returning the CID or "" after writing an error response.
-func (svc *Service) storeAndRegister(w http.ResponseWriter, raw []byte) string {
-	cid, err := svc.Store.PutCredential(raw)
+func (svc *Service) storeAndRegister(ctx context.Context, w http.ResponseWriter, raw []byte) string {
+	cid, err := svc.Store.PutCredential(ctx, raw)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, "", "could not store delegation")
 		return ""
 	}
-	chain, err := delegation.BuildChain(cid, svc.Store, svc.Config.Verify.MaxChainDepth)
+	chain, err := delegation.BuildChain(ctx, cid, svc.Store, svc.Config.Verify.MaxChainDepth)
 	if err != nil {
 		svc.failErr(w, http.StatusBadRequest, adtp.CodeMalformed, "delegation chain invalid", err)
 		return ""
@@ -334,7 +335,7 @@ func (svc *Service) storeAndRegister(w http.ResponseWriter, raw []byte) string {
 	for i, e := range chain.Elements {
 		chainCIDs[i] = e.CID
 	}
-	if err := svc.Store.Register(cid, chainCIDs); err != nil {
+	if err := svc.Store.Register(ctx, cid, chainCIDs); err != nil {
 		writeErr(w, http.StatusInternalServerError, "", "could not register delegation")
 		return ""
 	}
@@ -354,14 +355,14 @@ func handleVerify(svc *Service) http.HandlerFunc {
 		}
 		leafCID := req.ChainCIDs[0]
 
-		inv, err := svc.invocationFor(req, leafCID)
+		inv, err := svc.invocationFor(r.Context(), req, leafCID)
 		if err != nil {
 			writeErr(w, http.StatusBadRequest, adtp.CodeMalformed, err.Error())
 			return
 		}
 
 		cfg := svc.verifierConfig()
-		res := verify.Verify(nil, inv, cfg)
+		res := verify.Verify(r.Context(), nil, inv, cfg)
 
 		resp := adtp.VerifyResponse{
 			Authorized: res.OK,
@@ -381,7 +382,7 @@ func handleVerify(svc *Service) http.HandlerFunc {
 
 // invocationFor returns the invocation to verify: the client-supplied one, or a
 // daemon-built one signed with the leaf agent's key (custodial mode).
-func (svc *Service) invocationFor(req adtp.VerifyRequest, leafCID string) (*verify.UCANInvocation, error) {
+func (svc *Service) invocationFor(ctx context.Context, req adtp.VerifyRequest, leafCID string) (*verify.UCANInvocation, error) {
 	if len(req.Invocation) > 0 {
 		var inv verify.UCANInvocation
 		if err := json.Unmarshal(req.Invocation, &inv); err != nil {
@@ -389,7 +390,7 @@ func (svc *Service) invocationFor(req adtp.VerifyRequest, leafCID string) (*veri
 		}
 		return &inv, nil
 	}
-	raw, err := svc.Store.Get(leafCID)
+	raw, err := svc.Store.Get(ctx, leafCID)
 	if err != nil {
 		return nil, jsonError("leaf credential not found")
 	}
@@ -424,7 +425,7 @@ func handleRevoke(svc *Service) http.HandlerFunc {
 		}
 
 		if status == revocation.StatusCompromised && req.SubjectCID != "" {
-			report, err := revocation.ExecuteCascade(req.SubjectCID, svc.Store, svc.Store, nil, svc.auditLog(), svc.PlatformKey)
+			report, err := revocation.ExecuteCascade(r.Context(), req.SubjectCID, svc.Store, svc.Store, nil, svc.auditLog(), svc.PlatformKey)
 			if err != nil {
 				svc.failErr(w, http.StatusInternalServerError, "", "cascade failed", err)
 				return
@@ -440,27 +441,31 @@ func handleRevoke(svc *Service) http.HandlerFunc {
 		if subject == "" {
 			subject = req.SubjectDID
 		}
-		seq := svc.Store.CurrentSeq(subject) + 1
+		seq, seqErr := svc.Store.CurrentSeq(r.Context(), subject)
+		if seqErr != nil {
+			svc.failErr(w, http.StatusInternalServerError, "", "sequence lookup failed", seqErr)
+			return
+		}
 		auth := revocation.RevocationAuth{DID: svc.PlatformDID, Basis: revocation.AuthPlatform, Proof: subject}
 		entry, err := revocation.CreateRevocationEntry(
-			revocation.RevocationSubject{CID: req.SubjectCID, DID: req.SubjectDID}, scope, status, auth, seq, "", svc.PlatformKey)
+			revocation.RevocationSubject{CID: req.SubjectCID, DID: req.SubjectDID}, scope, status, auth, seq+1, "", svc.PlatformKey)
 		if err != nil {
 			svc.failErr(w, http.StatusForbidden, adtp.CodeDenied, "invalid revocation request", err)
 			return
 		}
-		if err := svc.Store.Revoke(*entry); err != nil {
+		if err := svc.Store.Revoke(r.Context(), *entry); err != nil {
 			svc.failErr(w, http.StatusConflict, "", "could not apply revocation", err)
 			return
 		}
 		_ = svc.auditLog().Append(audit.AuditEntry{EventType: audit.EventRevocationPosted, CredCID: req.SubjectCID, Payload: map[string]any{"status": req.Status}})
 		svc.log().Info("revocation posted", "subject", subject, "status", req.Status)
-		writeJSON(w, http.StatusOK, adtp.RevokeResponse{Seq: seq, Status: string(status)})
+		writeJSON(w, http.StatusOK, adtp.RevokeResponse{Seq: seq + 1, Status: string(status)})
 	}
 }
 
 func handleGetRevocationList(svc *Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		entries, err := svc.Store.RevocationEntries()
+		entries, err := svc.Store.RevocationEntries(r.Context())
 		if err != nil {
 			writeErr(w, http.StatusInternalServerError, "", "could not read revocations")
 			return
@@ -477,7 +482,7 @@ func handleGetRevocationList(svc *Service) http.HandlerFunc {
 func handleGetStatus(svc *Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		cid := r.PathValue("cid")
-		entry, err := svc.Store.GetStatus(cid)
+		entry, err := svc.Store.GetStatus(r.Context(), cid)
 		if err != nil {
 			writeErr(w, http.StatusInternalServerError, "", "status lookup failed")
 			return
@@ -493,7 +498,7 @@ func handleGetStatus(svc *Service) http.HandlerFunc {
 func handleGetAgent(svc *Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		did := r.PathValue("did")
-		agent, err := svc.Store.GetAgent(did)
+		agent, err := svc.Store.GetAgent(r.Context(), did)
 		if err != nil {
 			writeErr(w, http.StatusNotFound, "", "agent not found")
 			return

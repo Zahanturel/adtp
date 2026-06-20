@@ -19,7 +19,7 @@ type signedObject struct {
 
 func TestSignatureInputExactBytes(t *testing.T) {
 	obj := map[string]any{
-		"typ": "aitp/cav/1",
+		"typ": "adtp/cav/1",
 		"b":   1,
 		"a":   2,
 	}
@@ -29,14 +29,14 @@ func TestSignatureInputExactBytes(t *testing.T) {
 	}
 
 	want := append([]byte(DomainPrefix), 0x00)
-	want = append(want, []byte(`{"a":2,"b":1,"typ":"aitp/cav/1"}`)...)
+	want = append(want, []byte(`{"a":2,"b":1,"typ":"adtp/cav/1"}`)...)
 	if !bytes.Equal(got, want) {
 		t.Errorf("SignatureInput\n got: %q\nwant: %q", got, want)
 	}
 }
 
 func TestSignatureInputExcludesSig(t *testing.T) {
-	obj := signedObject{Typ: "aitp/cav/1", Iss: "did:key:zAlice", N: 7}
+	obj := signedObject{Typ: "adtp/cav/1", Iss: "did:key:zAlice", N: 7}
 
 	withoutSig, err := SignatureInput(obj)
 	if err != nil {
@@ -55,13 +55,13 @@ func TestSignatureInputExcludesSig(t *testing.T) {
 }
 
 func TestSignatureInputStructAndMapAgree(t *testing.T) {
-	obj := signedObject{Typ: "aitp/cav/1", Iss: "did:key:zAlice", N: 7}
+	obj := signedObject{Typ: "adtp/cav/1", Iss: "did:key:zAlice", N: 7}
 	fromStruct, err := SignatureInput(obj)
 	if err != nil {
 		t.Fatalf("struct: %v", err)
 	}
 	fromMap, err := SignatureInput(map[string]any{
-		"n": 7, "iss": "did:key:zAlice", "typ": "aitp/cav/1",
+		"n": 7, "iss": "did:key:zAlice", "typ": "adtp/cav/1",
 	})
 	if err != nil {
 		t.Fatalf("map: %v", err)
@@ -98,7 +98,7 @@ func TestSignVerifyRoundTrip(t *testing.T) {
 		t.Fatalf("GenerateKey: %v", err)
 	}
 
-	obj := signedObject{Typ: "aitp/cav/1", Iss: "did:key:zAlice", N: 7}
+	obj := signedObject{Typ: "adtp/cav/1", Iss: "did:key:zAlice", N: 7}
 	sig, err := Sign(obj, priv)
 	if err != nil {
 		t.Fatalf("Sign: %v", err)
@@ -122,7 +122,7 @@ func TestVerifyRejectsTamper(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GenerateKey: %v", err)
 	}
-	obj := signedObject{Typ: "aitp/cav/1", Iss: "did:key:zAlice", N: 7}
+	obj := signedObject{Typ: "adtp/cav/1", Iss: "did:key:zAlice", N: 7}
 	sig, err := Sign(obj, priv)
 	if err != nil {
 		t.Fatalf("Sign: %v", err)
@@ -160,7 +160,7 @@ func TestSignVerifyKeySizeErrors(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GenerateKey: %v", err)
 	}
-	obj := signedObject{Typ: "aitp/cav/1", N: 1}
+	obj := signedObject{Typ: "adtp/cav/1", N: 1}
 
 	if _, err := Sign(obj, ed25519.PrivateKey{1, 2, 3}); !errors.Is(err, ErrInvalidPrivateKey) {
 		t.Errorf("Sign(short key) = %v, want ErrInvalidPrivateKey", err)
@@ -183,7 +183,7 @@ func TestSignatureEncoding(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GenerateKey: %v", err)
 	}
-	sig, err := Sign(signedObject{Typ: "aitp/cav/1", N: 1}, priv)
+	sig, err := Sign(signedObject{Typ: "adtp/cav/1", N: 1}, priv)
 	if err != nil {
 		t.Fatalf("Sign: %v", err)
 	}

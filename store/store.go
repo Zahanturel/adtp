@@ -3,9 +3,11 @@
 package store
 
 import (
-	"github.com/adtp/adtp/internal/audit"
-	"github.com/adtp/adtp/internal/lifecycle"
-	"github.com/adtp/adtp/internal/revocation"
+	"context"
+
+	"github.com/Zahanturel/adtp/internal/audit"
+	"github.com/Zahanturel/adtp/internal/lifecycle"
+	"github.com/Zahanturel/adtp/internal/revocation"
 )
 
 // Store is the daemon's storage backend. It composes the credential, proof,
@@ -25,18 +27,18 @@ type Store interface {
 	revocation.RevocationService // Revoke, CurrentSeq
 
 	// PutAgent stores or replaces an agent; GetAgent retrieves one.
-	PutAgent(agent *lifecycle.Agent) error
-	GetAgent(did string) (*lifecycle.Agent, error)
+	PutAgent(ctx context.Context, agent *lifecycle.Agent) error
+	GetAgent(ctx context.Context, did string) (*lifecycle.Agent, error)
 
 	// PutCredential stores raw credential bytes and returns the CID.
-	PutCredential(raw []byte) (string, error)
+	PutCredential(ctx context.Context, raw []byte) (string, error)
 
 	// GetStatus returns the latest revocation entry for a subject, or nil.
-	GetStatus(subject string) (*revocation.RevocationEntry, error)
+	GetStatus(ctx context.Context, subject string) (*revocation.RevocationEntry, error)
 
 	// RevocationEntries snapshots the latest entry per subject for list
 	// publication.
-	RevocationEntries() ([]revocation.RevocationEntry, error)
+	RevocationEntries(ctx context.Context) ([]revocation.RevocationEntry, error)
 
 	// Audit returns the hash-linked audit log.
 	Audit() audit.AuditLog

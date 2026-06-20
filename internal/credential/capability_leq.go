@@ -3,7 +3,7 @@ package credential
 import (
 	"bytes"
 
-	"github.com/adtp/adtp/internal/signing"
+	"github.com/Zahanturel/adtp/internal/signing"
 )
 
 // CapabilityLeq reports whether child is less-than-or-equal-to (no broader than)

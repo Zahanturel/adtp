@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-const validHeaderJSON = `{"typ":"aitp/ucan/1","alg":"EdDSA","ucv":"0.1.0"}`
+const validHeaderJSON = `{"typ":"adtp/ucan/1","alg":"EdDSA","ucv":"0.1.0"}`
 
 func b64seg(s string) string { return base64.RawURLEncoding.EncodeToString([]byte(s)) }
 
@@ -188,8 +188,8 @@ func TestParseUCANMalformed(t *testing.T) {
 		{"header not base64url", "!!!." + b64seg(validPayload) + "." + base64.RawURLEncoding.EncodeToString(sig), ErrMalformedToken},
 		{"signature wrong length", makeToken(validHeaderJSON, validPayload, []byte{1, 2, 3}), ErrMalformedToken},
 		{"wrong typ", makeToken(`{"typ":"jwt","alg":"EdDSA","ucv":"0.1.0"}`, validPayload, sig), ErrUnsupportedHeader},
-		{"wrong alg", makeToken(`{"typ":"aitp/ucan/1","alg":"RS256","ucv":"0.1.0"}`, validPayload, sig), ErrUnsupportedHeader},
-		{"unsupported ucv", makeToken(`{"typ":"aitp/ucan/1","alg":"EdDSA","ucv":"9.9.9"}`, validPayload, sig), ErrUnsupportedHeader},
+		{"wrong alg", makeToken(`{"typ":"adtp/ucan/1","alg":"RS256","ucv":"0.1.0"}`, validPayload, sig), ErrUnsupportedHeader},
+		{"unsupported ucv", makeToken(`{"typ":"adtp/ucan/1","alg":"EdDSA","ucv":"9.9.9"}`, validPayload, sig), ErrUnsupportedHeader},
 		{"missing exp", makeToken(validHeaderJSON, `{"iss":"a","aud":"b","att":[],"prf":[],"nbf":1,"iat":1}`, sig), ErrMissingExpiry},
 		{"duplicate key in payload", makeToken(validHeaderJSON, `{"iss":"a","iss":"b","aud":"c","att":[],"prf":[],"exp":5}`, sig), ErrMalformedToken},
 		{"float in payload", makeToken(validHeaderJSON, `{"iss":"a","aud":"b","att":[],"prf":[],"exp":5.5}`, sig), ErrMalformedToken},

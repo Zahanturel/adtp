@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/adtp/adtp/internal/signing"
+	"github.com/Zahanturel/adtp/internal/signing"
 )
 
 func codeOf(err error) ErrorCode {
@@ -80,7 +80,7 @@ func TestVerifyInvocationRejections(t *testing.T) {
 		}, did, verifierDID},
 		{"tampered payload", func(inv *UCANInvocation) { inv.Run.Resource = "tool://s/evil" }, did, verifierDID},
 		{"wrong typ", func(inv *UCANInvocation) {
-			inv.Typ = "aitp/ucan/1"
+			inv.Typ = "adtp/ucan/1"
 			resign(t, inv, key)
 		}, did, verifierDID},
 	}

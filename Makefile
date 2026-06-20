@@ -1,8 +1,13 @@
 .PHONY: build test test-integration vet fmt cover run deps docker clean
 
+BINARY := adtpd
+ifeq ($(OS),Windows_NT)
+	BINARY := adtpd.exe
+endif
+
 # Build the daemon binary.
 build:
-	go build -o adtpd ./cmd/adtpd
+	go build -o $(BINARY) ./cmd/adtpd
 
 # Run the unit test suite (in-memory backend).
 test:
@@ -22,13 +27,14 @@ cover:
 	go test -cover ./...
 
 run: build
-	./adtpd --config config.yaml
+	./$(BINARY) --config config.yaml
 
 deps:
 	go mod tidy
 
 docker:
-	docker build -t adtp/adtpd .
+	docker build -t zahanturel/adtpd .
 
 clean:
-	rm -f adtpd platform.key api.key instance.id
+	go clean
+	$(RM) platform.key api.key instance.id

@@ -1,23 +1,24 @@
 package verify
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
 	"math"
 
-	"github.com/adtp/adtp/internal/audit"
-	"github.com/adtp/adtp/internal/credential"
-	"github.com/adtp/adtp/internal/delegation"
-	"github.com/adtp/adtp/internal/identity"
-	"github.com/adtp/adtp/internal/revocation"
+	"github.com/Zahanturel/adtp/internal/audit"
+	"github.com/Zahanturel/adtp/internal/credential"
+	"github.com/Zahanturel/adtp/internal/delegation"
+	"github.com/Zahanturel/adtp/internal/identity"
+	"github.com/Zahanturel/adtp/internal/revocation"
 )
 
 // RevocationCache reports the latest revocation entry for a subject (a
 // credential CID or principal DID) at verification step 6, or nil if the subject
 // is active. It is satisfied by revocation.MemoryRevocationCache.
 type RevocationCache interface {
-	GetStatus(subject string) (*revocation.RevocationEntry, error)
+	GetStatus(ctx context.Context, subject string) (*revocation.RevocationEntry, error)
 }
 
 // TrustPolicy describes a trusted external organization for cross-org
@@ -127,8 +128,8 @@ func step0Structural(chain *delegation.Chain) error {
 
 // step1BuildChain resolves and assembles the chain, translating chain-build
 // failures into verification codes.
-func step1BuildChain(leafCID string, store delegation.ProofStore, maxDepth int) (*delegation.Chain, error) {
-	chain, err := delegation.BuildChain(leafCID, store, maxDepth)
+func step1BuildChain(ctx context.Context, leafCID string, store delegation.ProofStore, maxDepth int) (*delegation.Chain, error) {
+	chain, err := delegation.BuildChain(ctx, leafCID, store, maxDepth)
 	if err != nil {
 		return nil, mapChainError(err)
 	}
@@ -234,7 +235,7 @@ func step5Temporal(chain *delegation.Chain, now, clockSkew int64) error {
 
 // step6Revocation denies on any revoked, suspended, compromised, cascaded, or
 // decommissioned subject. A nil cache means no revocation source is configured.
-func step6Revocation(chain *delegation.Chain, cache RevocationCache, tier RiskTier, logger *slog.Logger) error {
+func step6Revocation(ctx context.Context, chain *delegation.Chain, cache RevocationCache, tier RiskTier, logger *slog.Logger) error {
 	if cache == nil {
 		return nil
 	}
@@ -244,7 +245,7 @@ func step6Revocation(chain *delegation.Chain, cache RevocationCache, tier RiskTi
 		subjects[elemAud(e)] = struct{}{}
 	}
 	for subject := range subjects {
-		entry, err := cache.GetStatus(subject)
+		entry, err := cache.GetStatus(ctx, subject)
 		if err != nil {
 			if tier == TierHigh {
 				return verr(6, CodeRevocUnavailable, err, "revocation lookup for %q", subject)

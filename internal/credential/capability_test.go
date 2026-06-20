@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/adtp/adtp/internal/signing"
+	"github.com/Zahanturel/adtp/internal/signing"
 )
 
 func TestCanonicalizeURI(t *testing.T) {

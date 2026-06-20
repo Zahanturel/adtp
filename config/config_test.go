@@ -140,6 +140,25 @@ func TestValidateAuth(t *testing.T) {
 	})
 }
 
+func TestValidateRiskTier(t *testing.T) {
+	t.Run("typo rejected", func(t *testing.T) {
+		c := Default()
+		c.Verify.DefaultRiskTier = "HGIH"
+		if err := c.validate(); !errors.Is(err, ErrInvalidRiskTier) {
+			t.Errorf("err = %v, want ErrInvalidRiskTier", err)
+		}
+	})
+	t.Run("valid tiers accepted", func(t *testing.T) {
+		for _, tier := range []string{"HIGH", "MEDIUM", "LOW", "ANALYTICS"} {
+			c := Default()
+			c.Verify.DefaultRiskTier = tier
+			if err := c.validate(); err != nil {
+				t.Errorf("validate(%q) = %v", tier, err)
+			}
+		}
+	})
+}
+
 func TestEnvBadClockSkewAndDepth(t *testing.T) {
 	t.Run("bad clock skew", func(t *testing.T) {
 		t.Setenv("ADTP_VERIFY_CLOCK_SKEW_SECONDS", "nope")

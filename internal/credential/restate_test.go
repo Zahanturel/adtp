@@ -4,7 +4,7 @@ import (
 	"crypto/ed25519"
 	"testing"
 
-	"github.com/adtp/adtp/internal/identity"
+	"github.com/Zahanturel/adtp/internal/identity"
 )
 
 // delegableRoot mints a root credential whose audience is a fresh agent, and

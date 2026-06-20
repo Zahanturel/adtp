@@ -1,12 +1,13 @@
 package delegation
 
 import (
+	"context"
 	"crypto/ed25519"
 	"errors"
 	"testing"
 
-	"github.com/adtp/adtp/internal/credential"
-	"github.com/adtp/adtp/internal/identity"
+	"github.com/Zahanturel/adtp/internal/credential"
+	"github.com/Zahanturel/adtp/internal/identity"
 )
 
 func genID(t *testing.T) (ed25519.PrivateKey, string) {
@@ -83,7 +84,7 @@ func TestBuildChainThreeElements(t *testing.T) {
 	store := NewMemoryProofStore()
 	leafCID := twoHopRestrictChain(t, store)
 
-	chain, err := BuildChain(leafCID, store, DefaultMaxDepth)
+	chain, err := BuildChain(context.Background(), leafCID, store, DefaultMaxDepth)
 	if err != nil {
 		t.Fatalf("BuildChain: %v", err)
 	}
@@ -109,7 +110,7 @@ func TestBuildChainThreeElements(t *testing.T) {
 // content because its real CID never equals the lookup key (SD-5, Section 10.2).
 type mismatchStore struct{ raw []byte }
 
-func (s mismatchStore) Get(string) ([]byte, error) { return s.raw, nil }
+func (s mismatchStore) Get(context.Context, string) ([]byte, error) { return s.raw, nil }
 
 func TestBuildChainRejectsCIDMismatch(t *testing.T) {
 	key, did := genID(t)
@@ -125,7 +126,7 @@ func TestBuildChainRejectsCIDMismatch(t *testing.T) {
 	if credential.ComputeCID([]byte(token)) == wrongCID {
 		t.Fatal("precondition: real CID must differ from the wrong key")
 	}
-	if _, err := BuildChain(wrongCID, mismatchStore{raw: []byte(token)}, DefaultMaxDepth); !errors.Is(err, ErrCIDMismatch) {
+	if _, err := BuildChain(context.Background(), wrongCID, mismatchStore{raw: []byte(token)}, DefaultMaxDepth); !errors.Is(err, ErrCIDMismatch) {
 		t.Errorf("err = %v, want ErrCIDMismatch", err)
 	}
 }
@@ -135,8 +136,8 @@ func TestBuildChainRejectsCIDMismatch(t *testing.T) {
 // cycle infeasible, the forgery is caught as a CID mismatch rather than reaching
 // the cycle guard, which remains as defense-in-depth.
 func TestBuildChainForgedSelfLoopRejected(t *testing.T) {
-	selfLoop := []byte(`{"typ":"aitp/cav/1","iss":"did:key:zA","aud":"did:key:zB","prf":"bafkreiself","nbf":1,"exp":2,"dl":1,"cav":[{"type":"time_window","start":1,"end":2}],"sig":"AA"}`)
-	if _, err := BuildChain("bafkreiself", mismatchStore{raw: selfLoop}, DefaultMaxDepth); !errors.Is(err, ErrCIDMismatch) {
+	selfLoop := []byte(`{"typ":"adtp/cav/1","iss":"did:key:zA","aud":"did:key:zB","prf":"bafkreiself","nbf":1,"exp":2,"dl":1,"cav":[{"type":"time_window","start":1,"end":2}],"sig":"AA"}`)
+	if _, err := BuildChain(context.Background(), "bafkreiself", mismatchStore{raw: selfLoop}, DefaultMaxDepth); !errors.Is(err, ErrCIDMismatch) {
 		t.Errorf("err = %v, want ErrCIDMismatch", err)
 	}
 }
@@ -144,14 +145,14 @@ func TestBuildChainForgedSelfLoopRejected(t *testing.T) {
 func TestBuildChainDepthExceeded(t *testing.T) {
 	store := NewMemoryProofStore()
 	leafCID := twoHopRestrictChain(t, store) // depth 2
-	if _, err := BuildChain(leafCID, store, 1); !errors.Is(err, ErrChainTooDeep) {
+	if _, err := BuildChain(context.Background(), leafCID, store, 1); !errors.Is(err, ErrChainTooDeep) {
 		t.Errorf("err = %v, want ErrChainTooDeep", err)
 	}
 }
 
 func TestBuildChainProofNotFound(t *testing.T) {
 	store := NewMemoryProofStore()
-	if _, err := BuildChain("bafkreiaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", store, DefaultMaxDepth); !errors.Is(err, ErrProofNotFound) {
+	if _, err := BuildChain(context.Background(), "bafkreiaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", store, DefaultMaxDepth); !errors.Is(err, ErrProofNotFound) {
 		t.Errorf("err = %v, want ErrProofNotFound", err)
 	}
 }
@@ -169,7 +170,7 @@ func TestBuildChainBranchingUnsupported(t *testing.T) {
 		t.Fatalf("CreateUCAN: %v", err)
 	}
 	leafCID := store.Put([]byte(token))
-	if _, err := BuildChain(leafCID, store, DefaultMaxDepth); !errors.Is(err, ErrBranchingUnsupported) {
+	if _, err := BuildChain(context.Background(), leafCID, store, DefaultMaxDepth); !errors.Is(err, ErrBranchingUnsupported) {
 		t.Errorf("err = %v, want ErrBranchingUnsupported", err)
 	}
 }
@@ -200,7 +201,7 @@ func TestBuildChainModeMixingViolation(t *testing.T) {
 	}
 	leafCID := store.Put([]byte(restateToken))
 
-	if _, err := BuildChain(leafCID, store, DefaultMaxDepth); !errors.Is(err, ErrModeMixing) {
+	if _, err := BuildChain(context.Background(), leafCID, store, DefaultMaxDepth); !errors.Is(err, ErrModeMixing) {
 		t.Errorf("err = %v, want ErrModeMixing", err)
 	}
 }

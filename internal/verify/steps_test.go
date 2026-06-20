@@ -1,13 +1,14 @@
 package verify
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"testing"
 
-	"github.com/adtp/adtp/internal/credential"
-	"github.com/adtp/adtp/internal/delegation"
-	"github.com/adtp/adtp/internal/revocation"
+	"github.com/Zahanturel/adtp/internal/credential"
+	"github.com/Zahanturel/adtp/internal/delegation"
+	"github.com/Zahanturel/adtp/internal/revocation"
 )
 
 func TestVerificationErrorExternal(t *testing.T) {
@@ -199,7 +200,7 @@ func TestNumericParam(t *testing.T) {
 // fail-closed (HIGH) vs degrade-accept (lower tier) behavior.
 type errRevCache struct{}
 
-func (errRevCache) GetStatus(string) (*revocation.RevocationEntry, error) {
+func (errRevCache) GetStatus(context.Context, string) (*revocation.RevocationEntry, error) {
 	return nil, errors.New("revocation backend unavailable")
 }
 
@@ -209,14 +210,14 @@ func TestStep6RevocationFailClosedAtHigh(t *testing.T) {
 	}}
 
 	// HIGH tier: a lookup error must DENY (fail closed).
-	if err := step6Revocation(chain, errRevCache{}, TierHigh, nil); err == nil {
+	if err := step6Revocation(context.Background(), chain, errRevCache{}, TierHigh, nil); err == nil {
 		t.Errorf("HIGH tier with cache error = nil, want denial")
 	} else if ve := asVErr(err); ve == nil || ve.Code != CodeRevocUnavailable {
 		t.Errorf("HIGH tier error = %v, want O001 REVOC_UNAVAILABLE", err)
 	}
 
 	// MEDIUM tier: degrade-accept (fail open) — proceeds despite the error.
-	if err := step6Revocation(chain, errRevCache{}, TierMedium, nil); err != nil {
+	if err := step6Revocation(context.Background(), chain, errRevCache{}, TierMedium, nil); err != nil {
 		t.Errorf("MEDIUM tier with cache error = %v, want nil (degrade-accept)", err)
 	}
 }

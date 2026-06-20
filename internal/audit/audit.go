@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/adtp/adtp/internal/signing"
+	"github.com/Zahanturel/adtp/internal/signing"
 )
 
 // Audit event types.
@@ -102,7 +102,7 @@ func entryHash(seq, ts int64, prevHash, eventType, agentID, credCID, chainHash s
 		"payload":    payload,
 	})
 	if err != nil {
-		return "", fmt.Errorf("aitp/audit: hash entry: %w", err)
+		return "", fmt.Errorf("adtp/audit: hash entry: %w", err)
 	}
 	sum := sha256.Sum256(canonical)
 	return hex.EncodeToString(sum[:]), nil
@@ -166,14 +166,14 @@ func (l *MemoryAuditLog) VerifyChain() error {
 	prev := ""
 	for i, e := range l.entries {
 		if e.PrevHash != prev {
-			return fmt.Errorf("aitp/audit: %w: entry %d prev_hash break", ErrChainTampered, i)
+			return fmt.Errorf("adtp/audit: %w: entry %d prev_hash break", ErrChainTampered, i)
 		}
 		hash, err := entryHash(e.Seq, e.Ts, e.PrevHash, e.EventType, e.AgentID, e.CredCID, e.ChainHash, e.Payload)
 		if err != nil {
 			return err
 		}
 		if hash != e.EntryHash {
-			return fmt.Errorf("aitp/audit: %w: entry %d hash mismatch", ErrChainTampered, i)
+			return fmt.Errorf("adtp/audit: %w: entry %d hash mismatch", ErrChainTampered, i)
 		}
 		prev = e.EntryHash
 	}

@@ -48,10 +48,10 @@ func NewMemoryKeyStore() *MemoryKeyStore {
 
 func (s *MemoryKeyStore) Store(did string, priv ed25519.PrivateKey) error {
 	if did == "" {
-		return fmt.Errorf("aitp/identity: %w", ErrEmptyDID)
+		return fmt.Errorf("adtp/identity: %w", ErrEmptyDID)
 	}
 	if len(priv) != ed25519.PrivateKeySize {
-		return fmt.Errorf("aitp/identity: %w: have %d bytes, want %d",
+		return fmt.Errorf("adtp/identity: %w: have %d bytes, want %d",
 			ErrInvalidPrivateKey, len(priv), ed25519.PrivateKeySize)
 	}
 	owned := make(ed25519.PrivateKey, ed25519.PrivateKeySize)
@@ -63,7 +63,7 @@ func (s *MemoryKeyStore) Store(did string, priv ed25519.PrivateKey) error {
 func (s *MemoryKeyStore) Load(did string) (ed25519.PrivateKey, error) {
 	v, ok := s.keys.Load(did)
 	if !ok {
-		return nil, fmt.Errorf("aitp/identity: %w: %s", ErrKeyNotFound, did)
+		return nil, fmt.Errorf("adtp/identity: %w: %s", ErrKeyNotFound, did)
 	}
 	stored := v.(ed25519.PrivateKey)
 	out := make(ed25519.PrivateKey, len(stored))
@@ -73,7 +73,7 @@ func (s *MemoryKeyStore) Load(did string) (ed25519.PrivateKey, error) {
 
 func (s *MemoryKeyStore) Delete(did string) error {
 	if _, ok := s.keys.LoadAndDelete(did); !ok {
-		return fmt.Errorf("aitp/identity: %w: %s", ErrKeyNotFound, did)
+		return fmt.Errorf("adtp/identity: %w: %s", ErrKeyNotFound, did)
 	}
 	return nil
 }

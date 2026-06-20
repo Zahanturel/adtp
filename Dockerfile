@@ -1,5 +1,5 @@
 # Build a static adtpd binary. pgx is pure Go, so CGO is not required.
-FROM golang:1.26-alpine AS build
+FROM golang:1.26.4-alpine AS build
 WORKDIR /src
 
 COPY go.mod go.sum ./

@@ -1,6 +1,7 @@
 package revocation
 
 import (
+	"context"
 	"crypto/ed25519"
 	"fmt"
 	"sync"
@@ -23,7 +24,7 @@ func NewMemoryRevocationCache() *MemoryRevocationCache {
 // GetStatus returns the latest revocation entry for a subject (a credential CID
 // or principal DID), or nil if the subject is not currently revoked. A latest
 // status of REINSTATED reports the subject as active.
-func (c *MemoryRevocationCache) GetStatus(subject string) (*RevocationEntry, error) {
+func (c *MemoryRevocationCache) GetStatus(_ context.Context, subject string) (*RevocationEntry, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	e, ok := c.entries[subject]
@@ -37,10 +38,10 @@ func (c *MemoryRevocationCache) GetStatus(subject string) (*RevocationEntry, err
 // Revoke applies a single entry, rejecting an entry that is not validly signed by
 // the authority it names, an entry with no subject, and a per-subject sequence
 // rollback.
-func (c *MemoryRevocationCache) Revoke(entry RevocationEntry) error {
+func (c *MemoryRevocationCache) Revoke(_ context.Context, entry RevocationEntry) error {
 	key := entry.Subject.Key()
 	if key == "" {
-		return fmt.Errorf("aitp/revocation: %w", ErrMissingSubject)
+		return fmt.Errorf("adtp/revocation: %w", ErrMissingSubject)
 	}
 	if err := VerifyEntrySelfSignature(&entry); err != nil {
 		return err
@@ -48,7 +49,7 @@ func (c *MemoryRevocationCache) Revoke(entry RevocationEntry) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if existing, ok := c.entries[key]; ok && entry.Seq <= existing.Seq {
-		return fmt.Errorf("aitp/revocation: %w: seq %d <= %d for %s", ErrSequenceRollback, entry.Seq, existing.Seq, key)
+		return fmt.Errorf("adtp/revocation: %w: seq %d <= %d for %s", ErrSequenceRollback, entry.Seq, existing.Seq, key)
 	}
 	c.entries[key] = entry
 	return nil
@@ -67,7 +68,7 @@ func (c *MemoryRevocationCache) UpdateFromList(list *RevocationList, issuerPub e
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if list.Sequence <= c.listSeq {
-		return fmt.Errorf("aitp/revocation: %w: list seq %d <= cached %d", ErrSequenceRollback, list.Sequence, c.listSeq)
+		return fmt.Errorf("adtp/revocation: %w: list seq %d <= cached %d", ErrSequenceRollback, list.Sequence, c.listSeq)
 	}
 	for i := range list.Entries {
 		e := list.Entries[i]
@@ -97,11 +98,11 @@ func (c *MemoryRevocationCache) Entries() []RevocationEntry {
 }
 
 // CurrentSeq returns the highest sequence number recorded for a subject, or 0.
-func (c *MemoryRevocationCache) CurrentSeq(subject string) int64 {
+func (c *MemoryRevocationCache) CurrentSeq(_ context.Context, subject string) (int64, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	if e, ok := c.entries[subject]; ok {
-		return e.Seq
+		return e.Seq, nil
 	}
-	return 0
+	return 0, nil
 }
