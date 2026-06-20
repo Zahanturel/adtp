@@ -197,24 +197,120 @@
     .code-pill-copy.copied .icon-copy { display: none; }
     .code-pill-copy.copied .icon-check { display: block; }
 
-    /* ---- Positioning ---- */
-    .positioning {
-      padding: 120px 24px;
-      text-align: center;
+    /* ---- Problem animations ---- */
+    .problem-section { padding: 100px 0; position: relative; overflow: hidden; }
+    .problem-section + .problem-section { padding-top: 40px; }
+    .problem-stage {
+      position: relative;
+      height: 260px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
-    .positioning p {
+    .problem-canvas {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      pointer-events: none;
+      z-index: 2;
+    }
+    .p-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 20px;
+      text-align: center;
+      min-width: 130px;
+      z-index: 1;
+      opacity: 0;
+      transition: opacity 0.5s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1),
+                  border-color 0.4s ease, box-shadow 0.4s ease;
+    }
+    .p-card.show { opacity: 1; }
+    .p-card.active {
+      border-color: var(--green);
+      box-shadow: 0 0 24px rgba(74, 222, 128, 0.08);
+    }
+    .p-card.danger {
+      border-color: var(--red);
+      box-shadow: 0 0 24px rgba(248, 113, 113, 0.1);
+    }
+    .p-card.shatter { opacity: 0 !important; transition: opacity 0.1s ease !important; }
+    .p-card-type {
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin-bottom: 4px;
+    }
+    .p-card-did {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    .identity-stage { position: relative; width: 100%; height: 260px; }
+    .identity-stage .p-card {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+    }
+    .identity-stage .p-card--origin { z-index: 2; }
+    .identity-stage .p-card--ghost { z-index: 0; }
+    .identity-stage .p-card--ghost.show { opacity: 0.55; }
+    .p-chain {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0;
+      width: 100%;
+    }
+    .p-chain .p-card { flex-shrink: 0; }
+    .p-edge {
+      flex: 1;
+      max-width: 100px;
+      min-width: 40px;
+      position: relative;
+      opacity: 0;
+      transition: opacity 0.4s ease;
+    }
+    .p-edge.show { opacity: 1; }
+    .p-edge-track {
+      width: 100%; height: 2px;
+      background: var(--border);
+      border-radius: 1px;
+      overflow: hidden;
+    }
+    .p-edge-fill {
+      height: 100%; width: 0;
+      background: var(--accent);
+      border-radius: 1px;
+      transition: width 0.6s ease, background-color 0.4s ease;
+    }
+    .p-edge.show .p-edge-fill { width: 100%; }
+    .p-edge.faded { opacity: 0; transition: opacity 1.2s ease; }
+    .problem-text {
+      text-align: center;
+      margin-top: 40px;
+      opacity: 0;
+      transform: translateY(10px);
+      transition: opacity 0.6s ease 0.1s, transform 0.6s ease 0.1s;
+    }
+    .problem-text.show { opacity: 1; transform: translateY(0); }
+    .problem-text p {
       font-family: var(--sans);
       font-size: 20px;
-      font-weight: 400;
-      line-height: 1.65;
+      line-height: 1.6;
       color: var(--text-muted);
-      max-width: 640px;
+      max-width: 520px;
       margin: 0 auto;
     }
-    .positioning strong {
-      color: var(--text);
-      font-weight: 500;
+    .problem-text strong { color: var(--text); font-weight: 500; }
+    @keyframes pulseDanger {
+      0%, 100% { box-shadow: 0 0 20px rgba(248, 113, 113, 0.06); }
+      50% { box-shadow: 0 0 32px rgba(248, 113, 113, 0.18); }
     }
+    .p-card.pulse-danger { animation: pulseDanger 1.8s ease-in-out infinite; }
 
     /* ---- Section common ---- */
     .section-label {
@@ -249,6 +345,18 @@
       padding: 48px 32px 32px;
       margin-top: 48px;
       overflow: hidden;
+      position: relative;
+    }
+
+    .demo-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 1;
+      border-radius: 16px;
     }
 
     .chain {
@@ -257,6 +365,8 @@
       justify-content: center;
       gap: 0;
       min-height: 120px;
+      position: relative;
+      z-index: 2;
     }
 
     .chain-node {
@@ -387,6 +497,8 @@
       height: 20px;
       margin-top: 32px;
       transition: color 0.3s;
+      position: relative;
+      z-index: 2;
     }
     .demo-status.verified { color: var(--green); }
     .demo-status.revoked { color: var(--red); }
@@ -595,8 +707,16 @@
       .hero-sub { font-size: 17px; }
       .hero { padding: 60px 24px; }
 
-      .positioning { padding: 80px 24px; }
-      .positioning p { font-size: 18px; }
+      .problem-section { padding: 64px 0; }
+      .problem-section + .problem-section { padding-top: 24px; }
+      .identity-stage { height: 320px; }
+      .p-chain { flex-direction: column; gap: 0; }
+      .p-chain .p-card { min-width: 180px; }
+      .p-edge { min-width: auto; max-width: none; width: 2px; height: 24px; }
+      .p-edge-track { width: 2px; height: 100%; }
+      .p-edge-fill { width: 100% !important; height: 0; transition: height 0.5s ease, background-color 0.4s ease; }
+      .p-edge.show .p-edge-fill { height: 100%; }
+      .problem-text p { font-size: 18px; }
 
       .demo-section { padding: 96px 0; }
       .demo { padding: 32px 16px 24px; }
@@ -681,9 +801,64 @@
       </div>
     </header>
 
-    <section class="positioning fade-in">
+    <!-- Problem 1: Shared Identity -->
+    <section class="problem-section" id="problem-identity">
       <div class="wrap">
-        <p><strong>AI agents are accumulating authority without accountability.</strong> They inherit human credentials. They delegate to each other invisibly. When one goes wrong, revocation is best-effort. ADTP changes the foundation: every agent gets a cryptographic identity, every delegation is a signed chain, and revocation is provably complete &mdash; not eventually consistent, mathematically guaranteed. Single binary. Your infrastructure. Apache&nbsp;2.0.</p>
+        <div class="identity-stage problem-stage" id="stage-identity">
+          <canvas class="problem-canvas" id="canvas-identity"></canvas>
+          <div class="p-card p-card--origin" id="p1-origin">
+            <div class="p-card-type">your credentials</div>
+            <div class="p-card-did">did:key:z6MkhaX...</div>
+          </div>
+          <div class="p-card p-card--ghost" id="p1-g1"><div class="p-card-type">Agent A</div><div class="p-card-did">did:key:z6MkhaX...</div></div>
+          <div class="p-card p-card--ghost" id="p1-g2"><div class="p-card-type">Agent B</div><div class="p-card-did">did:key:z6MkhaX...</div></div>
+          <div class="p-card p-card--ghost" id="p1-g3"><div class="p-card-type">Agent C</div><div class="p-card-did">did:key:z6MkhaX...</div></div>
+          <div class="p-card p-card--ghost" id="p1-g4"><div class="p-card-type">Agent D</div><div class="p-card-did">did:key:z6MkhaX...</div></div>
+        </div>
+        <div class="problem-text" id="text-identity">
+          <p><strong>They inherit your credentials.</strong> Every agent operates as you.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Problem 2: Invisible Delegation -->
+    <section class="problem-section" id="problem-delegation">
+      <div class="wrap">
+        <div class="problem-stage" id="stage-delegation">
+          <div class="p-chain" id="p2-chain">
+            <div class="p-card" id="p2-a"><div class="p-card-type">Agent A</div><div class="p-card-did">did:key:z6MkpTH...</div></div>
+            <div class="p-edge" id="p2-e1"><div class="p-edge-track"><div class="p-edge-fill"></div></div></div>
+            <div class="p-card" id="p2-b"><div class="p-card-type">Agent B</div><div class="p-card-did">did:key:z6Mkf4G...</div></div>
+            <div class="p-edge" id="p2-e2"><div class="p-edge-track"><div class="p-edge-fill"></div></div></div>
+            <div class="p-card" id="p2-c"><div class="p-card-type">Agent C</div><div class="p-card-did">did:key:z6MksR2...</div></div>
+            <div class="p-edge" id="p2-e3"><div class="p-edge-track"><div class="p-edge-fill"></div></div></div>
+            <div class="p-card" id="p2-d"><div class="p-card-type">Agent D</div><div class="p-card-did">did:key:z6Mkw7P...</div></div>
+          </div>
+        </div>
+        <div class="problem-text" id="text-delegation">
+          <p><strong>They delegate to each other.</strong> No record. No visibility.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Problem 3: Failed Revocation -->
+    <section class="problem-section" id="problem-revocation">
+      <div class="wrap">
+        <div class="problem-stage" id="stage-revocation">
+          <canvas class="problem-canvas" id="canvas-revocation"></canvas>
+          <div class="p-chain" id="p3-chain">
+            <div class="p-card" id="p3-root"><div class="p-card-type">Root</div><div class="p-card-did">did:key:z6MkhaX...</div></div>
+            <div class="p-edge" id="p3-e1"><div class="p-edge-track"><div class="p-edge-fill"></div></div></div>
+            <div class="p-card" id="p3-a"><div class="p-card-type">Agent A</div><div class="p-card-did">did:key:z6MkpTH...</div></div>
+            <div class="p-edge" id="p3-e2"><div class="p-edge-track"><div class="p-edge-fill"></div></div></div>
+            <div class="p-card" id="p3-b"><div class="p-card-type">Agent B</div><div class="p-card-did">did:key:z6Mkf4G...</div></div>
+            <div class="p-edge" id="p3-e3"><div class="p-edge-track"><div class="p-edge-fill"></div></div></div>
+            <div class="p-card" id="p3-c"><div class="p-card-type">Agent C</div><div class="p-card-did">did:key:z6MksR2...</div></div>
+          </div>
+        </div>
+        <div class="problem-text" id="text-revocation">
+          <p><strong>You revoke access.</strong> The downstream agents keep running.</p>
+        </div>
       </div>
     </section>
 
@@ -692,6 +867,7 @@
         <div class="section-label">protocol</div>
         <h2>Issue. Restrict. Verify. Revoke.</h2>
         <div class="demo" id="demo">
+          <canvas class="demo-canvas" id="canvas-demo"></canvas>
           <div class="chain" id="chain">
             <div class="chain-node" id="d-root">
               <div class="chain-node-type">Platform Root</div>
@@ -883,10 +1059,104 @@
       }
 
       // ---- Demo animation ----
+
+      /* ---- Particle system ---- */
+      function createParticles(canvas) {
+        var ctx = canvas.getContext('2d');
+        var ps = [];
+        var raf = 0;
+        var running = false;
+
+        function resize() {
+          var dpr = window.devicePixelRatio || 1;
+          var rect = canvas.parentElement.getBoundingClientRect();
+          canvas.width = rect.width * dpr;
+          canvas.height = rect.height * dpr;
+          canvas.style.width = rect.width + 'px';
+          canvas.style.height = rect.height + 'px';
+          ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        }
+
+        function burst(cx, cy, count, color, speed) {
+          for (var i = 0; i < count; i++) {
+            var a = (Math.PI * 2 * i / count) + (Math.random() - 0.5) * 1.0;
+            var v = speed * (0.2 + Math.random() * 0.8);
+            ps.push({
+              x: cx + (Math.random() - 0.5) * 8,
+              y: cy + (Math.random() - 0.5) * 8,
+              vx: Math.cos(a) * v,
+              vy: Math.sin(a) * v,
+              size: 1.5 + Math.random() * 2.5,
+              color: color,
+              life: 40 + Math.floor(Math.random() * 30),
+              max: 70
+            });
+          }
+        }
+
+        function ambient(cx, cy, count, color, radius) {
+          for (var i = 0; i < count; i++) {
+            var a = Math.random() * Math.PI * 2;
+            var r = Math.random() * radius;
+            ps.push({
+              x: cx + Math.cos(a) * r,
+              y: cy + Math.sin(a) * r,
+              vx: (Math.random() - 0.5) * 0.15,
+              vy: -0.05 - Math.random() * 0.1,
+              size: 1 + Math.random() * 1.5,
+              color: color,
+              life: 60 + Math.floor(Math.random() * 60),
+              max: 120
+            });
+          }
+        }
+
+        function tick() {
+          var w = canvas.clientWidth;
+          var h = canvas.clientHeight;
+          ctx.clearRect(0, 0, w, h);
+          for (var i = ps.length - 1; i >= 0; i--) {
+            var p = ps[i];
+            p.x += p.vx;
+            p.y += p.vy;
+            p.vx *= 0.975;
+            p.vy *= 0.975;
+            p.vy += 0.008;
+            p.life--;
+            if (p.life <= 0) { ps.splice(i, 1); continue; }
+            var alpha = p.life / p.max;
+            ctx.globalAlpha = alpha * 0.7;
+            ctx.shadowBlur = 6;
+            ctx.shadowColor = p.color;
+            ctx.fillStyle = p.color;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.size * Math.min(1, alpha * 2), 0, Math.PI * 2);
+            ctx.fill();
+          }
+          ctx.globalAlpha = 1;
+          ctx.shadowBlur = 0;
+          if (ps.length > 0) {
+            raf = requestAnimationFrame(tick);
+          } else {
+            running = false;
+          }
+        }
+
+        function start() {
+          if (!running) { running = true; raf = requestAnimationFrame(tick); }
+        }
+
+        resize();
+        window.addEventListener('resize', resize);
+        return { burst: burst, ambient: ambient, start: start, resize: resize };
+      }
+
       var demoTimers = [];
       var demoEl = document.getElementById('demo');
       var statusEl = document.getElementById('d-status');
       var demoRunning = false;
+      var demoCanvas = document.getElementById('canvas-demo');
+      var demoParticles = demoCanvas ? createParticles(demoCanvas) : null;
 
       function demoDelay(fn, ms) {
         demoTimers.push(setTimeout(fn, ms));
@@ -912,6 +1182,18 @@
         if (el) {
           el.classList.remove('active');
           el.classList.add('revoked');
+
+          // Trigger particle burst at the element's center
+          if (demoParticles && demoEl) {
+            var demoRect = demoEl.getBoundingClientRect();
+            var elRect = el.getBoundingClientRect();
+            var cx = elRect.left - demoRect.left + elRect.width / 2;
+            var cy = elRect.top - demoRect.top + elRect.height / 2;
+
+            demoParticles.burst(cx, cy, 48, '#F87171', 3.2);
+            demoParticles.burst(cx, cy, 18, '#D4A574', 1.8);
+            demoParticles.start();
+          }
         }
       }
 
@@ -1032,6 +1314,195 @@
         }, { threshold: 0.25 });
         demoObs.observe(demoEl);
       }
+
+      function endanger(id) {
+        var el = document.getElementById(id);
+        if (el) { el.classList.remove('active'); el.classList.add('danger', 'pulse-danger'); }
+      }
+
+      /* ---- Animation 1: Shared Identity ---- */
+      var anim1Played = false;
+      function playIdentityAnim() {
+        if (anim1Played) return;
+        anim1Played = true;
+
+        var canvas = document.getElementById('canvas-identity');
+        var ps = createParticles(canvas);
+        var stage = document.getElementById('stage-identity');
+        var mobile = window.innerWidth < 768;
+
+        var offsets = mobile
+          ? [[-100, -90], [100, -90], [-100, 90], [100, 90]]
+          : [[-220, -50], [210, -45], [-180, 60], [200, 55]];
+
+        var t = 0;
+
+        t += 500;
+        setTimeout(function() {
+          show('p1-origin');
+          activate('p1-origin');
+          var sr = stage.getBoundingClientRect();
+          var or2 = document.getElementById('p1-origin').getBoundingClientRect();
+          ps.ambient(or2.left - sr.left + or2.width / 2, or2.top - sr.top + or2.height / 2, 8, '#6BCB8B', 50);
+          ps.start();
+        }, t);
+
+        for (var i = 0; i < 4; i++) {
+          (function(idx) {
+            t += 400;
+            setTimeout(function() {
+              var g = document.getElementById('p1-g' + (idx + 1));
+              g.classList.add('show');
+              g.style.transform = 'translate(calc(-50% + ' + offsets[idx][0] + 'px), calc(-50% + ' + offsets[idx][1] + 'px))';
+              var sr = stage.getBoundingClientRect();
+              var gr = g.getBoundingClientRect();
+              ps.ambient(gr.left - sr.left + gr.width / 2, gr.top - sr.top + gr.height / 2, 4, '#6BCB8B', 25);
+              ps.start();
+            }, t);
+          })(i);
+        }
+
+        t += 700;
+        setTimeout(function() {
+          document.getElementById('text-identity').classList.add('show');
+        }, t);
+      }
+
+      /* ---- Animation 2: Invisible Delegation ---- */
+      var anim2Played = false;
+      function playDelegationAnim() {
+        if (anim2Played) return;
+        anim2Played = true;
+
+        var nodes = ['p2-a', 'p2-b', 'p2-c', 'p2-d'];
+        var edges = ['p2-e1', 'p2-e2', 'p2-e3'];
+        var t = 0;
+
+        t += 400;
+        setTimeout(function() { show(nodes[0]); }, t);
+
+        for (var i = 0; i < edges.length; i++) {
+          (function(idx) {
+            t += 600;
+            setTimeout(function() {
+              show(edges[idx]);
+              show(nodes[idx + 1]);
+            }, t);
+          })(i);
+        }
+
+        t += 1200;
+
+        for (var j = 0; j < edges.length; j++) {
+          (function(idx) {
+            t += 450;
+            setTimeout(function() {
+              document.getElementById(edges[idx]).classList.add('faded');
+            }, t);
+          })(j);
+        }
+
+        t += 500;
+        setTimeout(function() {
+          nodes.forEach(function(id) {
+            var el = document.getElementById(id);
+            el.style.borderColor = 'var(--border)';
+            el.style.opacity = '0.45';
+          });
+        }, t);
+
+        t += 600;
+        setTimeout(function() {
+          document.getElementById('text-delegation').classList.add('show');
+        }, t);
+      }
+
+      /* ---- Animation 3: Failed Revocation ---- */
+      var anim3Played = false;
+      function playRevocationAnim() {
+        if (anim3Played) return;
+        anim3Played = true;
+
+        var canvas = document.getElementById('canvas-revocation');
+        var ps = createParticles(canvas);
+        var stage = document.getElementById('stage-revocation');
+
+        var nodes = ['p3-root', 'p3-a', 'p3-b', 'p3-c'];
+        var edges = ['p3-e1', 'p3-e2', 'p3-e3'];
+        var t = 0;
+
+        t += 400;
+        setTimeout(function() { show(nodes[0]); activate(nodes[0]); }, t);
+
+        for (var i = 0; i < edges.length; i++) {
+          (function(idx) {
+            t += 500;
+            setTimeout(function() {
+              show(edges[idx]);
+              show(nodes[idx + 1]);
+              activate(nodes[idx + 1]);
+            }, t);
+          })(i);
+        }
+
+        t += 300;
+        setTimeout(function() {
+          edges.forEach(function(id) {
+            document.getElementById(id).querySelector('.p-edge-fill').style.background = 'var(--green)';
+          });
+        }, t);
+
+        t += 1500;
+        setTimeout(function() {
+          var rootEl = document.getElementById('p3-root');
+          var sr = stage.getBoundingClientRect();
+          var rr = rootEl.getBoundingClientRect();
+          var cx = rr.left - sr.left + rr.width / 2;
+          var cy = rr.top - sr.top + rr.height / 2;
+
+          ps.burst(cx, cy, 55, '#F87171', 3.5);
+          ps.burst(cx, cy, 20, '#D4A574', 2);
+          ps.start();
+
+          rootEl.classList.add('shatter');
+          document.getElementById('p3-e1').classList.add('faded');
+        }, t);
+
+        t += 600;
+        setTimeout(function() {
+          endanger('p3-a');
+          document.getElementById('p3-e2').querySelector('.p-edge-fill').style.background = 'var(--red)';
+        }, t);
+
+        t += 400;
+        setTimeout(function() {
+          endanger('p3-b');
+          document.getElementById('p3-e3').querySelector('.p-edge-fill').style.background = 'var(--red)';
+        }, t);
+
+        t += 400;
+        setTimeout(function() { endanger('p3-c'); }, t);
+
+        t += 800;
+        setTimeout(function() {
+          document.getElementById('text-revocation').classList.add('show');
+        }, t);
+      }
+
+      /* ---- Trigger problem animations on scroll ---- */
+      var probObs = new IntersectionObserver(function(entries) {
+        entries.forEach(function(e) {
+          if (!e.isIntersecting) return;
+          if (e.target.id === 'problem-identity') playIdentityAnim();
+          if (e.target.id === 'problem-delegation') playDelegationAnim();
+          if (e.target.id === 'problem-revocation') playRevocationAnim();
+          probObs.unobserve(e.target);
+        });
+      }, { threshold: 0.3 });
+
+      document.querySelectorAll('.problem-section').forEach(function(el) {
+        probObs.observe(el);
+      });
     })();
   </script>
 
