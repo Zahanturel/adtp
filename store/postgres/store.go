@@ -206,7 +206,7 @@ func (s *PostgresStore) Revoke(ctx context.Context, e revocation.RevocationEntry
 	// Serialize concurrent revocations for the same subject so the MAX(seq)+1 read
 	// and the insert are atomic (the UNIQUE constraint is the backstop). The lock
 	// is released on commit/rollback.
-	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext($1)::bigint)`, e.Subject.CID+"\x00"+e.Subject.DID); err != nil {
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext($1)::bigint)`, e.Subject.CID+"\n"+e.Subject.DID); err != nil {
 		return fmt.Errorf("adtp/store/postgres: revoke lock: %w", err)
 	}
 
