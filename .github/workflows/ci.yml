@@ -23,3 +23,27 @@ jobs:
           go-version: '1.26'
       - run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
       - run: golangci-lint run ./...
+  postgres-integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: testpass
+          POSTGRES_DB: adtp_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Run postgres integration tests
+        env:
+          ADTP_TEST_POSTGRES_DSN: postgres://postgres:testpass@localhost:5432/adtp_test
+        run: go test -v -tags integration ./store/postgres/...

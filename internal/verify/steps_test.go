@@ -297,3 +297,55 @@ func TestAsVErrFallback(t *testing.T) {
 		t.Errorf("asVErr(plain) = %v, want malformed wrapper", e)
 	}
 }
+
+// stubRegStore is a minimal RegistrationChecker for step 11 tests.
+type stubRegStore struct {
+	registered map[string]bool
+}
+
+func (s *stubRegStore) Contains(_ context.Context, credentialCID, chainCID string) bool {
+	return s.registered[credentialCID+"\x00"+chainCID]
+}
+
+func TestStep11RegistrationFailsClosedAtHigh(t *testing.T) {
+	chain := &delegation.Chain{Elements: []delegation.ChainElement{
+		{Block: &credential.RestrictBlock{Aud: "did:key:zX", Exp: 100}, CID: "bafkreileaf", Mode: delegation.ModeRestrict},
+	}}
+	store := &stubRegStore{registered: map[string]bool{}}
+	err := step11Registration(context.Background(), chain, TierHigh, store, nil)
+	if err == nil {
+		t.Fatal("HIGH tier with unregistered leaf = nil, want denial")
+	}
+	if ve := asVErr(err); ve == nil || ve.Code != CodeUnregistered {
+		t.Errorf("error = %v, want V019 UNREGISTERED", err)
+	}
+}
+
+func TestStep11RegistrationDegradeAcceptsAtMedium(t *testing.T) {
+	chain := &delegation.Chain{Elements: []delegation.ChainElement{
+		{Block: &credential.RestrictBlock{Aud: "did:key:zX", Exp: 100}, CID: "bafkreileaf", Mode: delegation.ModeRestrict},
+	}}
+	store := &stubRegStore{registered: map[string]bool{}}
+	if err := step11Registration(context.Background(), chain, TierMedium, store, nil); err != nil {
+		t.Errorf("MEDIUM tier with unregistered leaf = %v, want nil (degrade-accept)", err)
+	}
+}
+
+func TestStep11RegistrationPassesWhenRegistered(t *testing.T) {
+	chain := &delegation.Chain{Elements: []delegation.ChainElement{
+		{Block: &credential.RestrictBlock{Aud: "did:key:zX", Exp: 100}, CID: "bafkreileaf", Mode: delegation.ModeRestrict},
+	}}
+	store := &stubRegStore{registered: map[string]bool{"bafkreileaf\x00bafkreileaf": true}}
+	if err := step11Registration(context.Background(), chain, TierHigh, store, nil); err != nil {
+		t.Errorf("HIGH tier with registered leaf = %v, want nil", err)
+	}
+}
+
+func TestStep11RegistrationNilStoreDegradeAccepts(t *testing.T) {
+	chain := &delegation.Chain{Elements: []delegation.ChainElement{
+		{Block: &credential.RestrictBlock{Aud: "did:key:zX", Exp: 100}, CID: "bafkreileaf", Mode: delegation.ModeRestrict},
+	}}
+	if err := step11Registration(context.Background(), chain, TierHigh, nil, nil); err != nil {
+		t.Errorf("nil store = %v, want nil (degrade-accept)", err)
+	}
+}

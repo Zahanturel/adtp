@@ -246,13 +246,14 @@ func principalFromContext(ctx context.Context) (string, bool) {
 	return p, ok
 }
 
-// OIDCMiddleware validates an OIDC bearer token on mutating requests and injects
-// the authenticated subject into the request context. Read-only GETs and /health
-// remain open, matching AuthMiddleware.
+// OIDCMiddleware validates an OIDC bearer token and injects the authenticated
+// subject into the request context. Only paths exempted by authBypass
+// (/health, /v1/revocation/list) skip validation — all other endpoints,
+// including GETs, require a valid token.
 func OIDCMiddleware(v *OIDCVerifier) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.URL.Path == "/health" || r.Method == http.MethodGet {
+			if authBypass(r) {
 				next.ServeHTTP(w, r)
 				return
 			}

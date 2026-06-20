@@ -41,11 +41,12 @@ curl -H "Authorization: Bearer <api-key>" \
 |---|---|
 | Identity Provider | Entra, Okta, Auth0 via OIDC |
 | SIEM / Audit | Datadog, Splunk, Elastic via webhook |
-| Agent Platforms | MCP, A2A, LangGraph, CrewAI |
+
+Compatible with MCP, A2A, LangGraph, and CrewAI via REST API.
 
 ## Technical highlights
 
-- Go daemon, single static binary. No runtime dependencies.
+- Go daemon, single static binary. No runtime dependencies (memory backend). Optional: PostgreSQL.
 - Ed25519 signatures, with a planned post-quantum migration path (ML-DSA-65).
 - RESTRICT mode: structural escalation prevention. No semantic comparison in the TCB.
 - Thirteen-step credential chain verification.
@@ -62,6 +63,10 @@ curl -H "Authorization: Bearer <api-key>" \
 
 - [Landing page](https://zahanturel.github.io/adtp/) — project home
 - [Protocol spec](docs/PROTOCOL.md)
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). All contributors must sign the [CLA](CLA.md). CLA Assistant will prompt you on your first pull request.
 
 ## Building on Windows
 

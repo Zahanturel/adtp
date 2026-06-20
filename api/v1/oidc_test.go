@@ -157,6 +157,60 @@ func TestAudienceContains(t *testing.T) {
 	}
 }
 
+func TestOIDCMiddlewareGetAgentRequiresAuth(t *testing.T) {
+	key, _ := rsa.GenerateKey(rand.Reader, 2048)
+	platformDID, platformKey, _ := identity.GenerateDID()
+
+	svc := &Service{
+		Store:       memory.New(),
+		Keys:        identity.NewMemoryKeyStore(),
+		PlatformKey: platformKey,
+		PlatformDID: platformDID,
+		Config:      config.Default(),
+		NonceCache:  verify.NewMemoryNonceCache(),
+		Logger:      slog.New(slog.NewTextHandler(io.Discard, nil)),
+		OIDC:        testVerifier(t, key, "k1"),
+	}
+	srv := httptest.NewServer(NewRouter(svc))
+	defer srv.Close()
+
+	resp, err := http.Get(srv.URL + "/v1/agents/did:key:zABC")
+	if err != nil {
+		t.Fatalf("GET /v1/agents/did:key:zABC: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("GET /v1/agents/{did} without token: got %d, want 401", resp.StatusCode)
+	}
+}
+
+func TestOIDCMiddlewareHealthBypass(t *testing.T) {
+	key, _ := rsa.GenerateKey(rand.Reader, 2048)
+	platformDID, platformKey, _ := identity.GenerateDID()
+
+	svc := &Service{
+		Store:       memory.New(),
+		Keys:        identity.NewMemoryKeyStore(),
+		PlatformKey: platformKey,
+		PlatformDID: platformDID,
+		Config:      config.Default(),
+		NonceCache:  verify.NewMemoryNonceCache(),
+		Logger:      slog.New(slog.NewTextHandler(io.Discard, nil)),
+		OIDC:        testVerifier(t, key, "k1"),
+	}
+	srv := httptest.NewServer(NewRouter(svc))
+	defer srv.Close()
+
+	resp, err := http.Get(srv.URL + "/health")
+	if err != nil {
+		t.Fatalf("GET /health: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("GET /health without token: got %d, want 200", resp.StatusCode)
+	}
+}
+
 // TestOIDCMiddlewareEndToEnd wires the OIDC verifier into the router and checks
 // that a valid token authorizes registration with the sub as sponsor.
 func TestOIDCMiddlewareEndToEnd(t *testing.T) {

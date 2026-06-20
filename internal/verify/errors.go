@@ -31,6 +31,7 @@ const (
 	CodeBranching       ErrorCode = "AGENT_ERR_V016_BRANCHING_UNSUPPORTED"
 	CodeMalformed       ErrorCode = "AGENT_ERR_V017_MALFORMED"
 	CodeCIDMismatch     ErrorCode = "AGENT_ERR_V018_CID_MISMATCH"
+	CodeUnregistered    ErrorCode = "AGENT_ERR_V019_UNREGISTERED"
 )
 
 // Operational errors (AGENT_ERR_O_*).

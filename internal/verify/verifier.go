@@ -34,6 +34,9 @@ type VerifierConfig struct {
 	NonceCache NonceCache
 	// RevocationCache reports subject revocation status (nil disables step 6).
 	RevocationCache RevocationCache
+	// RegistrationStore checks whether a credential is registered (nil
+	// disables step 11, degrade-accept).
+	RegistrationStore RegistrationChecker
 	// TrustPolicies authorize cross-organizational roots.
 	TrustPolicies []TrustPolicy
 	// AuditLog records outcomes (nil disables step 12).
@@ -98,8 +101,7 @@ type VerificationResult struct {
 // Verify runs the 13-step algorithm (Section 11) for an invocation, failing fast
 // on the first violation. The leaf credential is identified by the invocation's
 // run.delegation CID and resolved from the proof store; token, when non-nil, is
-// the inline leaf UCAN and is made resolvable for the walk. Steps 11 and 12 are
-// stubs until Phase 3.
+// the inline leaf UCAN and is made resolvable for the walk.
 func Verify(ctx context.Context, token *credential.UCAN, inv *UCANInvocation, config *VerifierConfig) *VerificationResult {
 	start := time.Now()
 	res := &VerificationResult{}
@@ -193,7 +195,7 @@ func Verify(ctx context.Context, token *credential.UCAN, inv *UCANInvocation, co
 	if e := asVErr(step10PoP(inv, elemAud(chain.Leaf()), config)); e != nil {
 		return fail(e)
 	}
-	if e := asVErr(step11Registration(chain, tier)); e != nil {
+	if e := asVErr(step11Registration(ctx, chain, tier, config.RegistrationStore, config.logger())); e != nil {
 		return fail(e)
 	}
 	_ = step12Audit(chain, elemAud(chain.Leaf()), config.AuditLog, config.now())

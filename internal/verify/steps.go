@@ -21,6 +21,13 @@ type RevocationCache interface {
 	GetStatus(ctx context.Context, subject string) (*revocation.RevocationEntry, error)
 }
 
+// RegistrationChecker reports whether a credential's chain is recorded in the
+// registration index. It is satisfied by store.Store (which embeds
+// revocation.RegistrationStore).
+type RegistrationChecker interface {
+	Contains(ctx context.Context, credentialCID, chainCID string) bool
+}
+
 // TrustPolicy describes a trusted external organization for cross-org
 // authorization (a simplified precursor to the ORG_TRUST document of Phase 5).
 type TrustPolicy struct {
@@ -401,9 +408,25 @@ func step10PoP(inv *UCANInvocation, leafAudDID string, config *VerifierConfig) e
 	return nil
 }
 
-// step11Registration is the first-use registration gate (Section 11 step 11),
-// stubbed until the transparency log lands in Phase 3.
-func step11Registration(chain *delegation.Chain, tier RiskTier) error {
+// step11Registration verifies that the leaf credential was registered before
+// first use (Section 11 step 11). A nil checker means no registration store is
+// configured: degrade-accept for backwards compatibility. At HIGH tier an
+// unregistered leaf fails closed; at lower tiers it degrade-accepts.
+func step11Registration(ctx context.Context, chain *delegation.Chain, tier RiskTier, checker RegistrationChecker, logger *slog.Logger) error {
+	if checker == nil {
+		return nil
+	}
+	leafCID := chain.Leaf().CID
+	if checker.Contains(ctx, leafCID, leafCID) {
+		return nil
+	}
+	if tier == TierHigh {
+		return verr(11, CodeUnregistered, nil, "leaf credential %s is not registered", leafCID)
+	}
+	if logger != nil {
+		logger.Warn("leaf credential not registered; degrade-accepting below HIGH tier",
+			"cid", leafCID, "tier", tier.String())
+	}
 	return nil
 }
 

@@ -3,37 +3,48 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Zerith — Identity infrastructure for AI agents</title>
-  <meta name="description" content="Cryptographic delegation chains, provably-complete revocation, and cross-organizational trust for AI agents. Open protocol. No vendor lock-in.">
-  <meta property="og:title" content="Zerith — Identity infrastructure for AI agents">
-  <meta property="og:description" content="Cryptographic delegation chains. Provably-complete revocation. Cross-organizational trust. Open protocol.">
+  <title>Zerith &mdash; Cryptographic identity for AI agents</title>
+  <meta name="description" content="ADTP gives every AI agent its own cryptographic key, delegation chain, and provably-complete revocation. Single binary. Open protocol. Apache 2.0.">
+  <meta property="og:title" content="Zerith &mdash; Cryptographic identity for AI agents">
+  <meta property="og:description" content="Every agent gets its own key. Every delegation is a signed chain. Revocation is provably complete.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://zahanturel.github.io/adtp/">
-  <meta name="theme-color" content="#F0EBE3">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Zerith">
+  <meta name="twitter:description" content="Cryptographic identity for AI agents.">
+  <meta name="theme-color" content="#09090B">
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="canonical" href="https://zahanturel.github.io/adtp/">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/geist@1/dist/fonts/geist-sans/style.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/geist@1/dist/fonts/geist-mono/style.css">
   <style>
     :root {
-      --parchment: #F0EBE3;
-      --forest: #3D5C4A;
-      --forest-hover: #2E4A3A;
-      --ink: #1C1917;
-      --stone: #7A756C;
-      --sage: #E2EBE6;
-      --border: #D4CEC4;
-      --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
-      --serif: "Instrument Serif", Georgia, "Times New Roman", serif;
-      --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      --bg: #09090B;
+      --bg-alt: #111113;
+      --bg-card: #18181B;
+      --border: #27272A;
+      --border-hover: #3F3F46;
+      --text: #FAFAFA;
+      --text-muted: #A1A1AA;
+      --text-dim: #71717A;
+      --accent: #6BCB8B;
+      --accent-hover: #8DD9A6;
+      --accent-subtle: #1A3325;
+      --green: #4ADE80;
+      --red: #F87171;
+      --amber: #D4A574;
+      --mono: 'Geist Mono', 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+      --sans: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
     }
 
     *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
+    html { scroll-behavior: smooth; scroll-padding-top: 80px; }
+
     body {
-      background: var(--parchment);
-      color: var(--ink);
+      background: var(--bg);
+      color: var(--text);
       font-family: var(--sans);
       font-size: 17px;
       line-height: 1.7;
@@ -41,262 +52,599 @@
       -moz-osx-font-smoothing: grayscale;
     }
 
-    a { color: var(--forest); text-decoration: none; transition: color 0.15s; }
-    a:hover { color: var(--forest-hover); }
+    ::selection { background: var(--accent); color: var(--bg); }
 
-    .wrap {
-      max-width: 720px;
-      margin: 0 auto;
-      padding: 0 24px;
-    }
+    a { color: var(--accent); text-decoration: none; transition: color 0.15s; }
+    a:hover { color: var(--accent-hover); }
+
+    .wrap { max-width: 720px; margin: 0 auto; padding: 0 24px; }
+    .wrap-wide { max-width: 960px; margin: 0 auto; padding: 0 24px; }
 
     /* ---- Nav ---- */
     nav {
-      padding: 28px 0;
-      border-bottom: 1px solid var(--border);
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      padding: 0;
+      background: transparent;
+      transition: background 0.3s, border-color 0.3s;
+      border-bottom: 1px solid transparent;
+    }
+    nav.scrolled {
+      background: rgba(9, 9, 11, 0.85);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom-color: var(--border);
     }
     nav .wrap {
       display: flex;
       align-items: center;
       justify-content: space-between;
+      height: 64px;
     }
-    .wordmark {
-      font-family: var(--serif);
-      font-size: 22px;
-      color: var(--ink);
-      letter-spacing: 0.5px;
+    .nav-wordmark {
+      font-family: var(--sans);
+      font-size: 20px;
+      font-weight: 500;
+      color: var(--text);
+      letter-spacing: 0.3px;
     }
-    .nav-links {
-      display: flex;
-      gap: 28px;
-      font-size: 15px;
-      color: var(--stone);
-    }
-    .nav-links a { color: var(--stone); }
-    .nav-links a:hover { color: var(--ink); }
+    .nav-wordmark:hover { color: var(--text); }
+    .nav-links { display: flex; gap: 28px; font-size: 15px; }
+    .nav-links a { color: var(--text-muted); }
+    .nav-links a:hover { color: var(--text); }
 
     /* ---- Hero ---- */
     .hero {
-      padding: 100px 0 80px;
+      min-height: 100vh;
+      min-height: 100svh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       text-align: center;
+      padding: 80px 24px;
+      position: relative;
+      background: radial-gradient(ellipse at 50% 40%, rgba(107, 203, 139, 0.04) 0%, transparent 70%);
     }
-    .hero-mark {
-      display: block;
-      width: 88px;
-      height: 88px;
+    .hero-inner { max-width: 800px; width: 100%; }
+    .hero h1 {
+      font-family: var(--sans);
+      font-size: 72px;
+      font-weight: 600;
+      line-height: 1.05;
+      letter-spacing: -2px;
+      color: var(--text);
+      margin-bottom: 24px;
+    }
+    .hero-sub {
+      font-size: 20px;
+      line-height: 1.6;
+      color: var(--text-muted);
+      max-width: 560px;
       margin: 0 auto 40px;
     }
-    .hero h1 {
-      font-family: var(--serif);
-      font-size: 44px;
-      font-weight: 400;
-      line-height: 1.15;
-      letter-spacing: -0.5px;
-      margin-bottom: 20px;
-    }
-    .hero p {
-      font-size: 18px;
-      color: var(--stone);
-      max-width: 520px;
-      margin: 0 auto 36px;
-      line-height: 1.6;
-    }
-    .hero-buttons {
+    .hero-cta {
       display: flex;
-      gap: 12px;
-      justify-content: center;
-      flex-wrap: wrap;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
     }
-    .btn {
+    .hero-link {
+      font-size: 15px;
+      color: var(--text-muted);
+      transition: color 0.15s;
+    }
+    .hero-link:hover { color: var(--text); }
+
+    /* Hero entrance animation */
+    .js .hero h1,
+    .js .hero-sub,
+    .js .hero-cta {
+      opacity: 0;
+      animation: fadeUp 0.7s ease forwards;
+    }
+    .js .hero h1 { animation-delay: 0.1s; }
+    .js .hero-sub { animation-delay: 0.3s; }
+    .js .hero-cta { animation-delay: 0.5s; }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(24px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ---- Code pill ---- */
+    .code-pill {
       display: inline-flex;
       align-items: center;
-      gap: 8px;
-      padding: 12px 24px;
-      font-size: 15px;
-      font-family: var(--sans);
-      border-radius: 6px;
-      transition: all 0.15s;
-      cursor: pointer;
-      border: none;
-    }
-    .btn-primary {
-      background: var(--forest);
-      color: var(--parchment);
-    }
-    .btn-primary:hover {
-      background: var(--forest-hover);
-      color: var(--parchment);
-    }
-    .btn-secondary {
-      background: transparent;
-      color: var(--forest);
+      gap: 12px;
+      background: var(--bg-card);
       border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 18px;
+      font-family: var(--mono);
+      font-size: 14px;
+      color: var(--text);
+      transition: border-color 0.2s;
+      max-width: 100%;
+      overflow: hidden;
     }
-    .btn-secondary:hover {
-      border-color: var(--forest);
-      color: var(--forest-hover);
+    .code-pill:hover { border-color: var(--border-hover); }
+    .code-pill-prompt {
+      color: var(--text-dim);
+      user-select: none;
+      flex-shrink: 0;
     }
+    .code-pill-text {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .code-pill-copy {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      padding: 4px;
+      display: flex;
+      align-items: center;
+      flex-shrink: 0;
+      transition: color 0.2s;
+    }
+    .code-pill-copy:hover { color: var(--text); }
+    .code-pill-copy .icon-check { display: none; color: var(--accent); }
+    .code-pill-copy.copied .icon-copy { display: none; }
+    .code-pill-copy.copied .icon-check { display: block; }
 
     /* ---- Positioning ---- */
     .positioning {
-      padding: 60px 0;
-      border-top: 1px solid var(--border);
-      border-bottom: 1px solid var(--border);
+      padding: 120px 24px;
+      text-align: center;
     }
     .positioning p {
-      font-family: var(--serif);
-      font-size: 22px;
-      line-height: 1.55;
-      text-align: center;
-      max-width: 620px;
+      font-family: var(--sans);
+      font-size: 20px;
+      font-weight: 400;
+      line-height: 1.65;
+      color: var(--text-muted);
+      max-width: 640px;
       margin: 0 auto;
-      color: var(--ink);
     }
     .positioning strong {
-      color: var(--forest);
-      font-weight: 400;
+      color: var(--text);
+      font-weight: 500;
     }
 
-    /* ---- Sections ---- */
-    section {
-      padding: 80px 0;
-    }
-    section + section {
-      border-top: 1px solid var(--border);
-    }
+    /* ---- Section common ---- */
     .section-label {
+      font-family: var(--mono);
       font-size: 13px;
-      color: var(--stone);
-      letter-spacing: 2px;
+      font-weight: 500;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: var(--accent);
       margin-bottom: 16px;
-      text-transform: lowercase;
     }
     section h2 {
-      font-family: var(--serif);
-      font-size: 32px;
-      font-weight: 400;
-      line-height: 1.25;
-      margin-bottom: 24px;
+      font-family: var(--sans);
+      font-size: 36px;
+      font-weight: 600;
+      line-height: 1.2;
+      letter-spacing: -0.5px;
+      color: var(--text);
+      margin-bottom: 32px;
     }
-    section p {
-      color: var(--ink);
-      margin-bottom: 16px;
-    }
-    section p:last-child { margin-bottom: 0; }
 
-    /* ---- Capabilities ---- */
-    .capabilities {
-      margin-top: 40px;
-    }
-    .capability {
-      padding: 28px 0;
+    /* ---- Demo section ---- */
+    .demo-section {
+      padding: 160px 0;
       border-top: 1px solid var(--border);
     }
-    .capability:last-child {
-      border-bottom: 1px solid var(--border);
+
+    .demo {
+      background: var(--bg-alt);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 48px 32px 32px;
+      margin-top: 48px;
+      overflow: hidden;
+    }
+
+    .chain {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0;
+      min-height: 120px;
+    }
+
+    .chain-node {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px 24px;
+      min-width: 160px;
+      text-align: center;
+      opacity: 0;
+      transform: translateY(10px);
+      transition: opacity 0.5s ease, transform 0.5s ease, border-color 0.4s ease, box-shadow 0.4s ease;
+      flex-shrink: 0;
+    }
+    .chain-node.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .chain-node.active {
+      border-color: var(--green);
+      box-shadow: 0 0 24px rgba(74, 222, 128, 0.08);
+    }
+    .chain-node.revoked {
+      border-color: var(--red);
+      box-shadow: 0 0 24px rgba(248, 113, 113, 0.08);
+    }
+    .chain-node.fade-out {
+      opacity: 0;
+      transform: translateY(-10px);
+    }
+    .chain-node-type {
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin-bottom: 6px;
+    }
+    .chain-node-did {
+      font-family: var(--mono);
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+    .chain-node-caps {
+      margin-top: 10px;
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--text-dim);
+      padding: 3px 10px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      display: inline-block;
+    }
+    .chain-node.active .chain-node-caps { border-color: rgba(74, 222, 128, 0.3); }
+    .chain-node.revoked .chain-node-caps { border-color: rgba(248, 113, 113, 0.3); }
+    .chain-node-badge {
+      margin-top: 6px;
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--accent);
+    }
+
+    .chain-edge {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      flex: 1;
+      max-width: 120px;
+      min-width: 48px;
+      gap: 6px;
+      opacity: 0;
+      transition: opacity 0.4s ease;
+    }
+    .chain-edge.show { opacity: 1; }
+    .chain-edge.fade-out { opacity: 0; }
+
+    .chain-edge-label {
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--text-dim);
+    }
+    .chain-edge-track {
+      width: 100%;
+      height: 2px;
+      background: var(--border);
+      position: relative;
+      overflow: hidden;
+      border-radius: 1px;
+    }
+    .chain-edge-fill {
+      position: absolute;
+      top: 0;
+      left: 0;
+      height: 100%;
+      width: 0;
+      background: var(--accent);
+      transition: width 0.7s ease, background-color 0.4s ease;
+      border-radius: 1px;
+    }
+    .chain-edge.show .chain-edge-fill { width: 100%; }
+    .chain-edge.active .chain-edge-fill { background: var(--green); }
+    .chain-edge.revoked .chain-edge-fill { background: var(--red); }
+
+    .chain-edge-arrow {
+      position: absolute;
+      right: -1px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 0;
+      height: 0;
+      border-top: 5px solid transparent;
+      border-bottom: 5px solid transparent;
+      border-left: 6px solid var(--accent);
+      transition: border-left-color 0.4s ease;
+    }
+    .chain-edge.active .chain-edge-arrow { border-left-color: var(--green); }
+    .chain-edge.revoked .chain-edge-arrow { border-left-color: var(--red); }
+
+    .demo-status {
+      text-align: center;
+      font-family: var(--mono);
+      font-size: 13px;
+      color: var(--text-dim);
+      height: 20px;
+      margin-top: 32px;
+      transition: color 0.3s;
+    }
+    .demo-status.verified { color: var(--green); }
+    .demo-status.revoked { color: var(--red); }
+
+    /* ---- Pipeline ---- */
+    .pipeline-section {
+      padding: 160px 0;
+      border-top: 1px solid var(--border);
+    }
+    .pipeline-list {
+      margin-top: 48px;
+      border-left: 1px solid var(--border);
+      padding-left: 24px;
+    }
+    .pipeline-step {
+      display: flex;
+      align-items: baseline;
+      gap: 16px;
+      padding: 10px 0;
+      opacity: 0;
+      transform: translateY(8px);
+      transition: opacity 0.4s ease, transform 0.4s ease;
+      transition-delay: calc(var(--i) * 60ms);
+    }
+    .pipeline-step.in-view {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .pipeline-num {
+      font-family: var(--mono);
+      font-size: 14px;
+      color: var(--accent);
+      min-width: 24px;
+      text-align: right;
+      flex-shrink: 0;
+    }
+    .pipeline-name {
+      font-family: var(--mono);
+      font-size: 15px;
+      color: var(--text-muted);
+    }
+
+    /* ---- Capabilities ---- */
+    .capabilities-section {
+      padding: 160px 0;
+      border-top: 1px solid var(--border);
+    }
+    .capability {
+      margin-bottom: 72px;
+    }
+    .capability:last-child { margin-bottom: 0; }
+    .capability-label {
+      font-family: var(--mono);
+      font-size: 12px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 12px;
     }
     .capability h3 {
-      font-family: var(--serif);
-      font-size: 21px;
-      font-weight: 400;
-      margin-bottom: 8px;
-      color: var(--ink);
+      font-family: var(--sans);
+      font-size: 28px;
+      font-weight: 600;
+      line-height: 1.25;
+      letter-spacing: -0.3px;
+      color: var(--text);
+      margin-bottom: 12px;
     }
     .capability p {
-      color: var(--stone);
-      font-size: 16px;
-      margin-bottom: 0;
-    }
-    .capability .tag {
-      display: inline-block;
-      font-size: 12px;
-      font-family: var(--mono);
-      color: var(--forest);
-      background: var(--sage);
-      padding: 2px 8px;
-      border-radius: 3px;
-      margin-top: 8px;
+      font-size: 17px;
+      line-height: 1.7;
+      color: var(--text-muted);
+      max-width: 600px;
     }
 
     /* ---- Integration ---- */
+    .integration-section {
+      padding: 160px 0;
+      border-top: 1px solid var(--border);
+    }
     .integration-grid {
       display: grid;
-      grid-template-columns: 1fr 1fr 1fr;
+      grid-template-columns: repeat(3, 1fr);
       gap: 1px;
       background: var(--border);
       border: 1px solid var(--border);
-      border-radius: 8px;
+      border-radius: 12px;
       overflow: hidden;
-      margin-top: 32px;
+      margin-top: 40px;
     }
-    .integration-item {
-      background: var(--parchment);
+    .integration-card {
+      background: var(--bg-alt);
       padding: 28px 24px;
     }
-    .integration-item .label {
-      font-size: 13px;
-      color: var(--stone);
+    .integration-card-label {
+      font-family: var(--mono);
+      font-size: 12px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--text-dim);
       margin-bottom: 10px;
-      letter-spacing: 1px;
     }
-    .integration-item .value {
+    .integration-card-value {
       font-size: 15px;
-      color: var(--ink);
+      color: var(--text);
       line-height: 1.5;
     }
-
-    /* ---- Code block ---- */
-    .code-block {
-      background: var(--ink);
-      color: #c8c4bc;
-      border-radius: 8px;
-      padding: 28px 32px;
-      overflow-x: auto;
+    .integration-note {
       margin-top: 24px;
+      font-size: 15px;
+      color: var(--text-dim);
+    }
+
+    /* ---- Quickstart ---- */
+    .quickstart-section {
+      padding: 160px 0;
+      border-top: 1px solid var(--border);
+    }
+    .code-block {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 32px;
+      margin-top: 40px;
+      overflow-x: auto;
+      position: relative;
       font-family: var(--mono);
       font-size: 14px;
-      line-height: 1.7;
+      line-height: 1.8;
     }
-    .code-block .comment { color: #6b6860; }
-    .code-block .cmd { color: #c8c4bc; }
-    .code-block .flag { color: #7b9a88; }
-    .code-block .string { color: #a6967c; }
-    .code-block .output { color: #6b6860; font-style: italic; }
+    .code-block .c { color: var(--text-dim); }
+    .code-block .cmd { color: var(--text); }
+    .code-block .flag { color: var(--accent); }
+    .code-block .str { color: var(--amber); }
+    .code-block .out { color: var(--text-dim); font-style: italic; }
+    .code-block .ln { display: block; }
+    .code-block .ln + .ln.gap { margin-top: 16px; }
+    .code-copy {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 6px 8px;
+      cursor: pointer;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      transition: color 0.2s, border-color 0.2s;
+    }
+    .code-copy:hover { color: var(--text); border-color: var(--border-hover); }
+    .code-copy .icon-check { display: none; color: var(--accent); }
+    .code-copy.copied .icon-copy { display: none; }
+    .code-copy.copied .icon-check { display: block; }
 
     /* ---- Footer ---- */
     footer {
-      padding: 60px 0;
+      padding: 80px 0 48px;
       border-top: 1px solid var(--border);
     }
-    footer .wordmark {
+    .footer-wordmark {
+      font-family: var(--sans);
       font-size: 18px;
+      font-weight: 500;
+      color: var(--text);
       margin-bottom: 8px;
     }
     footer p {
-      color: var(--stone);
       font-size: 14px;
+      color: var(--text-dim);
       margin-bottom: 4px;
     }
-    footer .footer-links {
-      margin-top: 16px;
+    .footer-links {
+      margin-top: 20px;
       display: flex;
-      gap: 20px;
+      gap: 24px;
       font-size: 14px;
     }
-    footer .footer-links a { color: var(--stone); }
-    footer .footer-links a:hover { color: var(--forest); }
+    .footer-links a { color: var(--text-muted); }
+    .footer-links a:hover { color: var(--text); }
+    .footer-built {
+      margin-top: 40px;
+      font-size: 13px;
+      color: var(--text-dim);
+    }
+
+    /* ---- Scroll animations ---- */
+    .fade-in {
+      opacity: 0;
+      transform: translateY(20px);
+      transition: opacity 0.6s ease, transform 0.6s ease;
+    }
+    .fade-in.in-view {
+      opacity: 1;
+      transform: translateY(0);
+    }
 
     /* ---- Responsive ---- */
-    @media (max-width: 640px) {
-      .hero { padding: 72px 0 60px; }
-      .hero h1 { font-size: 32px; }
-      .hero p { font-size: 16px; }
-      .hero-mark { width: 64px; height: 64px; margin-bottom: 28px; }
+    @media (max-width: 768px) {
+      .hero h1 {
+        font-size: 40px;
+        letter-spacing: -1px;
+      }
+      .hero h1 br { display: none; }
+      .hero-sub { font-size: 17px; }
+      .hero { padding: 60px 24px; }
+
+      .positioning { padding: 80px 24px; }
       .positioning p { font-size: 18px; }
-      section h2 { font-size: 26px; }
+
+      .demo-section { padding: 96px 0; }
+      .demo { padding: 32px 16px 24px; }
+      .chain {
+        flex-direction: column;
+        gap: 0;
+      }
+      .chain-node {
+        min-width: 200px;
+        padding: 16px 20px;
+      }
+      .chain-edge {
+        flex-direction: row;
+        max-width: none;
+        width: 2px;
+        height: 32px;
+        gap: 0;
+      }
+      .chain-edge-label { display: none; }
+      .chain-edge-track {
+        width: 2px;
+        height: 100%;
+      }
+      .chain-edge-fill {
+        width: 100% !important;
+        height: 0;
+        transition: height 0.5s ease, background-color 0.4s ease;
+      }
+      .chain-edge.show .chain-edge-fill { height: 100%; }
+      .chain-edge-arrow { display: none; }
+
+      section h2 { font-size: 28px; }
+
+      .pipeline-section { padding: 96px 0; }
+      .pipeline-list { padding-left: 16px; }
+      .pipeline-name { font-size: 14px; }
+
+      .capabilities-section { padding: 96px 0; }
+      .capability { margin-bottom: 56px; }
+      .capability h3 { font-size: 24px; }
+
+      .integration-section { padding: 96px 0; }
       .integration-grid { grid-template-columns: 1fr; }
+
+      .quickstart-section { padding: 96px 0; }
       .code-block { padding: 20px; font-size: 13px; }
-      section { padding: 60px 0; }
+
+      .code-pill { font-size: 13px; padding: 12px 14px; gap: 8px; }
     }
   </style>
 </head>
@@ -304,7 +652,7 @@
 
   <nav>
     <div class="wrap">
-      <a href="/" class="wordmark">Zerith</a>
+      <a href="/" class="nav-wordmark">Zerith</a>
       <div class="nav-links">
         <a href="#protocol">Protocol</a>
         <a href="#start">Get started</a>
@@ -313,136 +661,379 @@
     </div>
   </nav>
 
-  <header class="hero">
-    <div class="wrap">
-      <svg class="hero-mark" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-        <rect x="0" y="0" width="100" height="5" rx="0.5" fill="#3D5C4A"/>
-        <polygon points="78,5 100,5 22,91 0,91" fill="#3D5C4A"/>
-        <rect x="0" y="91" width="100" height="9" rx="0.5" fill="#3D5C4A"/>
-      </svg>
-      <h1>Identity infrastructure<br>for AI agents</h1>
-      <p>Cryptographic delegation chains. Provably-complete revocation. Cross-organizational trust. Open protocol.</p>
-      <div class="hero-buttons">
-        <a href="https://github.com/Zahanturel/adtp" class="btn btn-primary" target="_blank" rel="noopener">View on GitHub</a>
-        <a href="https://github.com/Zahanturel/adtp/blob/main/docs/PROTOCOL.md" class="btn btn-secondary">Read the protocol</a>
-      </div>
-    </div>
-  </header>
+  <main>
 
-  <div class="positioning">
-    <div class="wrap">
-      <p>Microsoft Agent 365 governs Microsoft agents. Google governs Google agents. <strong>Zerith governs all agents</strong>&hairsp;&mdash;&hairsp;across platforms, across organizations, with cryptographic proof.</p>
-    </div>
-  </div>
-
-  <section>
-    <div class="wrap">
-      <div class="section-label">the problem</div>
-      <h2>The identity gap</h2>
-      <p>AI agents inherit human credentials. When Agent&nbsp;A delegates to Agent&nbsp;B, no existing system records that delegation cryptographically or enforces what B can do with that authority.</p>
-      <p>When something goes wrong&hairsp;&mdash;&hairsp;and at scale, it will&hairsp;&mdash;&hairsp;there is no verifiable record of who authorized what, to which agent, and what it was allowed to do.</p>
-      <p>Enterprise agent governance today means vendor-scoped controls. Microsoft for Microsoft. Google for Google. The cross-platform, cross-organization case&hairsp;&mdash;&hairsp;where it matters most&hairsp;&mdash;&hairsp;has no solution.</p>
-    </div>
-  </section>
-
-  <section id="protocol">
-    <div class="wrap">
-      <div class="section-label">the protocol</div>
-      <h2>What ADTP does</h2>
-      <p>Zerith implements ADTP&hairsp;&mdash;&hairsp;the Agent Delegation and Trust Protocol. A Go daemon, single binary, that provides four capabilities.</p>
-
-      <div class="capabilities">
-        <div class="capability">
-          <h3>Verifiable agent identity</h3>
-          <p>Every agent gets a cryptographic identity derived from an Ed25519 keypair. No shared credentials. No service accounts. Each agent signs its own operations with its own key.</p>
-          <span class="tag">did:key</span>
-        </div>
-
-        <div class="capability">
-          <h3>Delegation chains</h3>
-          <p>When Agent&nbsp;A delegates to Agent&nbsp;B, ADTP issues a credential encoding who delegated, to whom, what capabilities, under what constraints. RESTRICT mode enforces structural escalation prevention&hairsp;&mdash;&hairsp;no descendant can exceed its ancestor's permissions.</p>
-          <span class="tag">UCAN + RESTRICT</span>
-        </div>
-
-        <div class="capability">
-          <h3>Cascade revocation</h3>
-          <p>Revoke one credential. A registration invariant guarantees every descendant is also revoked. Not best effort&hairsp;&mdash;&hairsp;provably complete.</p>
-        </div>
-
-        <div class="capability">
-          <h3>Cross-organizational trust</h3>
-          <p>Bilateral agreements between organizations. Non-transitive, depth-bounded. Organization&nbsp;A's agents interact with Organization&nbsp;B's agents under verifiable, auditable policy&hairsp;&mdash;&hairsp;without either side exposing its internal IAM.</p>
+    <header class="hero">
+      <div class="hero-inner">
+        <h1>Your agents are using <br>your identity.</h1>
+        <p class="hero-sub">ADTP gives every agent its own cryptographic key, its own delegation chain, and provably-complete revocation. Single binary. Open protocol.</p>
+        <div class="hero-cta">
+          <div class="code-pill">
+            <span class="code-pill-prompt">$</span>
+            <span class="code-pill-text">git clone https://github.com/Zahanturel/adtp.git</span>
+            <button class="code-pill-copy" data-copy="git clone https://github.com/Zahanturel/adtp.git" aria-label="Copy to clipboard">
+              <svg class="icon-copy" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5.5" y="2.5" width="8" height="10" rx="1"/><path d="M3.5 5.5v7a1 1 0 001 1h7"/></svg>
+              <svg class="icon-check" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5l3.5 3.5L13 5"/></svg>
+            </button>
+          </div>
+          <a href="https://github.com/Zahanturel/adtp/blob/main/docs/PROTOCOL.md" class="hero-link">Read the protocol &rarr;</a>
         </div>
       </div>
-    </div>
-  </section>
+    </header>
 
-  <section>
-    <div class="wrap">
-      <div class="section-label">integration</div>
-      <h2>Drops into your stack</h2>
-      <p>ADTP works with your existing identity provider, exports to your SIEM, and integrates with the agent platforms you already run.</p>
+    <section class="positioning fade-in">
+      <div class="wrap">
+        <p><strong>AI agents are accumulating authority without accountability.</strong> They inherit human credentials. They delegate to each other invisibly. When one goes wrong, revocation is best-effort. ADTP changes the foundation: every agent gets a cryptographic identity, every delegation is a signed chain, and revocation is provably complete &mdash; not eventually consistent, mathematically guaranteed. Single binary. Your infrastructure. Apache&nbsp;2.0.</p>
+      </div>
+    </section>
 
-      <div class="integration-grid">
-        <div class="integration-item">
-          <div class="label">identity</div>
-          <div class="value">Entra, Okta, Auth0 via OIDC</div>
-        </div>
-        <div class="integration-item">
-          <div class="label">audit</div>
-          <div class="value">Datadog, Splunk, Elastic via webhook</div>
-        </div>
-        <div class="integration-item">
-          <div class="label">platforms</div>
-          <div class="value">MCP, A2A, LangGraph, CrewAI</div>
+    <section class="demo-section" id="protocol">
+      <div class="wrap-wide">
+        <div class="section-label">protocol</div>
+        <h2>Issue. Restrict. Verify. Revoke.</h2>
+        <div class="demo" id="demo">
+          <div class="chain" id="chain">
+            <div class="chain-node" id="d-root">
+              <div class="chain-node-type">Platform Root</div>
+              <div class="chain-node-did">did:key:z6MkhaX...</div>
+            </div>
+            <div class="chain-edge" id="d-edge1">
+              <div class="chain-edge-label">issue</div>
+              <div class="chain-edge-track"><div class="chain-edge-fill"></div><div class="chain-edge-arrow"></div></div>
+            </div>
+            <div class="chain-node" id="d-agent-a">
+              <div class="chain-node-type">Agent A</div>
+              <div class="chain-node-did">did:key:z6MkpTH...</div>
+              <div class="chain-node-caps">read, write, delegate</div>
+            </div>
+            <div class="chain-edge" id="d-edge2">
+              <div class="chain-edge-label">restrict</div>
+              <div class="chain-edge-track"><div class="chain-edge-fill"></div><div class="chain-edge-arrow"></div></div>
+            </div>
+            <div class="chain-node" id="d-agent-b">
+              <div class="chain-node-type">Agent B</div>
+              <div class="chain-node-did">did:key:z6Mkf4G...</div>
+              <div class="chain-node-caps">read</div>
+              <div class="chain-node-badge">restrict</div>
+            </div>
+          </div>
+          <div class="demo-status" id="d-status"></div>
         </div>
       </div>
-    </div>
-  </section>
+    </section>
 
-  <section>
-    <div class="wrap">
-      <div class="section-label">technical</div>
-      <h2>Built like infrastructure</h2>
-      <p>Go daemon. Single static binary. One process, no runtime dependencies. Ed25519 signatures with a planned post-quantum migration path (ML-DSA-65). Thirteen-step credential chain verification. Apache&nbsp;2.0 open source.</p>
-    </div>
-  </section>
-
-  <section id="start">
-    <div class="wrap">
-      <div class="section-label">get started</div>
-      <h2>From clone to a registered agent</h2>
-      <div class="code-block">
-        <span class="comment"># Clone and build</span><br>
-        <span class="cmd">git clone https://github.com/Zahanturel/adtp.git</span><br>
-        <span class="cmd">cd adtp && make build</span><br>
-        <br>
-        <span class="comment"># Run the daemon</span><br>
-        <span class="cmd">./adtpd <span class="flag">--config</span> config.yaml</span><br>
-        <span class="output"># → adtpd listening on 127.0.0.1:8080</span><br>
-        <span class="output"># → generated API key: abc123...  ← copy this</span><br>
-        <br>
-        <span class="comment"># Register an agent (use the API key printed above)</span><br>
-        <span class="cmd">curl <span class="flag">-H</span> <span class="string">"Authorization: Bearer &lt;api-key&gt;"</span> \</span><br>
-        <span class="cmd">&nbsp;&nbsp;<span class="flag">-X POST</span> localhost:8080/v1/agents \</span><br>
-        <span class="cmd">&nbsp;&nbsp;<span class="flag">-d</span> <span class="string">'{"sponsor_did":"did:key:z6Mk..."}'</span></span>
+    <section class="pipeline-section fade-in">
+      <div class="wrap">
+        <div class="section-label">verification</div>
+        <h2>Thirteen steps between a claim and its execution.</h2>
+        <div class="pipeline-list" id="pipeline">
+          <div class="pipeline-step" style="--i:0"><span class="pipeline-num">01</span><span class="pipeline-name">Chain construction</span></div>
+          <div class="pipeline-step" style="--i:1"><span class="pipeline-num">02</span><span class="pipeline-name">Structural validation</span></div>
+          <div class="pipeline-step" style="--i:2"><span class="pipeline-num">03</span><span class="pipeline-name">Issuer-audience linkage</span></div>
+          <div class="pipeline-step" style="--i:3"><span class="pipeline-num">04</span><span class="pipeline-name">Root trust verification</span></div>
+          <div class="pipeline-step" style="--i:4"><span class="pipeline-num">05</span><span class="pipeline-name">Ed25519 signature verification</span></div>
+          <div class="pipeline-step" style="--i:5"><span class="pipeline-num">06</span><span class="pipeline-name">Temporal bounds check</span></div>
+          <div class="pipeline-step" style="--i:6"><span class="pipeline-num">07</span><span class="pipeline-name">Revocation status</span></div>
+          <div class="pipeline-step" style="--i:7"><span class="pipeline-num">08</span><span class="pipeline-name">Capability attenuation</span></div>
+          <div class="pipeline-step" style="--i:8"><span class="pipeline-num">09</span><span class="pipeline-name">Authorization matching</span></div>
+          <div class="pipeline-step" style="--i:9"><span class="pipeline-num">10</span><span class="pipeline-name">Cross-org policy evaluation</span></div>
+          <div class="pipeline-step" style="--i:10"><span class="pipeline-num">11</span><span class="pipeline-name">Proof of possession</span></div>
+          <div class="pipeline-step" style="--i:11"><span class="pipeline-num">12</span><span class="pipeline-name">Registration check</span></div>
+          <div class="pipeline-step" style="--i:12"><span class="pipeline-num">13</span><span class="pipeline-name">Audit trail</span></div>
+        </div>
       </div>
-    </div>
-  </section>
+    </section>
+
+    <section class="capabilities-section fade-in">
+      <div class="wrap">
+        <div class="section-label">capabilities</div>
+
+        <div class="capability">
+          <div class="capability-label">restrict mode</div>
+          <h3>Escalation is structurally impossible.</h3>
+          <p>RESTRICT mode enforces capability attenuation at every delegation step. A child credential can only narrow its parent's permissions &mdash; never widen them. This is not a policy check. It is an invariant enforced at issuance and verified at step 8 of the pipeline.</p>
+        </div>
+
+        <div class="capability">
+          <div class="capability-label">cascade revocation</div>
+          <h3>Revoke one. Kill every descendant.</h3>
+          <p>A registration invariant guarantees that when a credential is revoked, every descendant is already dead. Not a background job. Not eventual consistency. Mathematical completeness, verified at the storage layer.</p>
+        </div>
+
+        <div class="capability">
+          <div class="capability-label">cross-org trust</div>
+          <h3>Your agents. Their agents. No shared IAM.</h3>
+          <p>Bilateral agreements between organizations. Non-transitive and depth-bounded. Organization A's agents work with Organization B's agents under auditable policy &mdash; evaluated at step 10 &mdash; without exposing either side's internal identity infrastructure.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="integration-section fade-in">
+      <div class="wrap">
+        <div class="section-label">integration</div>
+        <h2>Drops into your stack.</h2>
+        <div class="integration-grid">
+          <div class="integration-card">
+            <div class="integration-card-label">Identity</div>
+            <div class="integration-card-value">Entra, Okta, Auth0 via OIDC</div>
+          </div>
+          <div class="integration-card">
+            <div class="integration-card-label">Audit</div>
+            <div class="integration-card-value">Datadog, Splunk, Elastic via webhook</div>
+          </div>
+          <div class="integration-card">
+            <div class="integration-card-label">Runtime</div>
+            <div class="integration-card-value">Go daemon, single static binary, ~15 MB</div>
+          </div>
+        </div>
+        <p class="integration-note">Compatible with MCP, A2A, LangGraph, and CrewAI via REST API.</p>
+      </div>
+    </section>
+
+    <section class="quickstart-section" id="start">
+      <div class="wrap">
+        <div class="section-label">get started</div>
+        <h2>From clone to a registered agent.</h2>
+        <div class="code-block">
+          <button class="code-copy" id="copy-quickstart" aria-label="Copy commands to clipboard">
+            <svg class="icon-copy" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5.5" y="2.5" width="8" height="10" rx="1"/><path d="M3.5 5.5v7a1 1 0 001 1h7"/></svg>
+            <svg class="icon-check" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5l3.5 3.5L13 5"/></svg>
+          </button>
+          <code><span class="ln"><span class="c"># Clone and build</span></span><span class="ln"><span class="cmd">git clone https://github.com/Zahanturel/adtp.git</span></span><span class="ln"><span class="cmd">cd adtp <span class="flag">&amp;&amp;</span> make build</span></span><span class="ln gap"><span class="c"># Run the daemon</span></span><span class="ln"><span class="cmd">./adtpd <span class="flag">--config</span> config.yaml</span></span><span class="ln"><span class="out"># adtpd listening on 127.0.0.1:8080</span></span><span class="ln"><span class="out"># generated API key: abc123...  copy this</span></span><span class="ln gap"><span class="c"># Register an agent</span></span><span class="ln"><span class="cmd">curl <span class="flag">-H</span> <span class="str">"Authorization: Bearer &lt;api-key&gt;"</span> \</span></span><span class="ln"><span class="cmd">  <span class="flag">-X POST</span> localhost:8080/v1/agents \</span></span><span class="ln"><span class="cmd">  <span class="flag">-d</span> <span class="str">'{"sponsor_did":"did:key:z6Mk..."}'</span></span></span></code>
+        </div>
+      </div>
+    </section>
+
+  </main>
 
   <footer>
     <div class="wrap">
-      <div class="wordmark">Zerith</div>
-      <p>ADTP&hairsp;&mdash;&hairsp;the Agent Delegation and Trust Protocol.</p>
+      <div class="footer-wordmark">Zerith</div>
+      <p>ADTP &mdash; the Agent Delegation and Trust Protocol.</p>
       <p>Apache 2.0 license. Open source.</p>
       <div class="footer-links">
         <a href="https://github.com/Zahanturel/adtp" target="_blank" rel="noopener">GitHub</a>
         <a href="https://github.com/Zahanturel/adtp/blob/main/docs/PROTOCOL.md" target="_blank" rel="noopener">Protocol</a>
         <a href="https://www.apache.org/licenses/LICENSE-2.0" target="_blank" rel="noopener">License</a>
       </div>
-      <p style="margin-top: 32px; font-size: 13px;">Built by Zahan Turel</p>
+      <p class="footer-built">Built by Zahan Turel</p>
     </div>
   </footer>
+
+  <script>
+    (function() {
+      'use strict';
+      document.documentElement.classList.add('js');
+
+      // ---- Nav scroll ----
+      var nav = document.querySelector('nav');
+      window.addEventListener('scroll', function() {
+        nav.classList.toggle('scrolled', window.scrollY > 50);
+      }, { passive: true });
+
+      // ---- Scroll fade-in ----
+      var fadeObs = new IntersectionObserver(function(entries) {
+        entries.forEach(function(e) {
+          if (e.isIntersecting) {
+            e.target.classList.add('in-view');
+            fadeObs.unobserve(e.target);
+          }
+        });
+      }, { threshold: 0.12 });
+      document.querySelectorAll('.fade-in').forEach(function(el) { fadeObs.observe(el); });
+
+      // ---- Pipeline stagger ----
+      var pipelineEl = document.getElementById('pipeline');
+      if (pipelineEl) {
+        var pipeObs = new IntersectionObserver(function(entries) {
+          if (entries[0].isIntersecting) {
+            pipelineEl.querySelectorAll('.pipeline-step').forEach(function(s) {
+              s.classList.add('in-view');
+            });
+            pipeObs.disconnect();
+          }
+        }, { threshold: 0.15 });
+        pipeObs.observe(pipelineEl);
+      }
+
+      // ---- Copy to clipboard ----
+      var COPY_TEXTS = {
+        quickstart: 'git clone https://github.com/Zahanturel/adtp.git\ncd adtp && make build\n./adtpd --config config.yaml'
+      };
+
+      document.querySelectorAll('.code-pill-copy').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          var text = btn.getAttribute('data-copy');
+          if (!text) return;
+          navigator.clipboard.writeText(text).then(function() {
+            btn.classList.add('copied');
+            setTimeout(function() { btn.classList.remove('copied'); }, 2000);
+          });
+        });
+      });
+
+      var qsCopy = document.getElementById('copy-quickstart');
+      if (qsCopy) {
+        qsCopy.addEventListener('click', function() {
+          navigator.clipboard.writeText(COPY_TEXTS.quickstart).then(function() {
+            qsCopy.classList.add('copied');
+            setTimeout(function() { qsCopy.classList.remove('copied'); }, 2000);
+          });
+        });
+      }
+
+      // ---- Demo animation ----
+      var demoTimers = [];
+      var demoEl = document.getElementById('demo');
+      var statusEl = document.getElementById('d-status');
+      var demoRunning = false;
+
+      function demoDelay(fn, ms) {
+        demoTimers.push(setTimeout(fn, ms));
+      }
+
+      function clearDemo() {
+        demoTimers.forEach(function(t) { clearTimeout(t); });
+        demoTimers = [];
+      }
+
+      function show(id) {
+        var el = document.getElementById(id);
+        if (el) el.classList.add('show');
+      }
+
+      function activate(id) {
+        var el = document.getElementById(id);
+        if (el) el.classList.add('active');
+      }
+
+      function revoke(id) {
+        var el = document.getElementById(id);
+        if (el) {
+          el.classList.remove('active');
+          el.classList.add('revoked');
+        }
+      }
+
+      function setStatus(text, cls) {
+        if (!statusEl) return;
+        statusEl.textContent = text;
+        statusEl.className = 'demo-status';
+        if (cls) statusEl.classList.add(cls);
+      }
+
+      function resetDemo() {
+        if (!demoEl) return;
+        demoEl.querySelectorAll('.chain-node, .chain-edge').forEach(function(el) {
+          el.classList.remove('show', 'active', 'revoked', 'fade-out');
+        });
+        setStatus('');
+      }
+
+      function fadeOutDemo() {
+        if (!demoEl) return;
+        demoEl.querySelectorAll('.chain-node, .chain-edge').forEach(function(el) {
+          el.classList.add('fade-out');
+        });
+        setStatus('');
+      }
+
+      var VERIFY_STEPS = [
+        'Chain construction', 'Structural validation', 'Issuer-audience linkage',
+        'Root trust', 'Signature verification', 'Temporal bounds',
+        'Revocation check', 'Capability attenuation', 'Authorization',
+        'Cross-org policy', 'Proof of possession', 'Registration', 'Audit trail'
+      ];
+
+      function runDemo() {
+        if (!demoRunning) return;
+        clearDemo();
+        resetDemo();
+
+        var t = 0;
+
+        t += 600;
+        demoDelay(function() {
+          show('d-root');
+          setStatus('Issuing root identity...');
+        }, t);
+
+        t += 1300;
+        demoDelay(function() {
+          show('d-edge1');
+          show('d-agent-a');
+          setStatus('Delegating to Agent A...');
+        }, t);
+
+        t += 1400;
+        demoDelay(function() {
+          show('d-edge2');
+          show('d-agent-b');
+          setStatus('RESTRICT: attenuating capabilities...');
+        }, t);
+
+        t += 1300;
+        var verifyStart = t;
+        VERIFY_STEPS.forEach(function(name, i) {
+          demoDelay(function() {
+            setStatus('Verifying... ' + (i + 1) + '/13 ' + name);
+          }, verifyStart + i * 140);
+        });
+        t += 13 * 140;
+
+        t += 300;
+        demoDelay(function() {
+          activate('d-root');
+          activate('d-edge1');
+          activate('d-agent-a');
+          activate('d-edge2');
+          activate('d-agent-b');
+          setStatus('Chain verified - 13/13 steps passed', 'verified');
+        }, t);
+
+        t += 2000;
+        demoDelay(function() {
+          revoke('d-root');
+          setStatus('Revoking root credential...', 'revoked');
+        }, t);
+
+        t += 700;
+        demoDelay(function() {
+          revoke('d-edge1');
+          revoke('d-agent-a');
+          setStatus('Cascade propagating...', 'revoked');
+        }, t);
+
+        t += 700;
+        demoDelay(function() {
+          revoke('d-edge2');
+          revoke('d-agent-b');
+          setStatus('Cascade complete', 'revoked');
+        }, t);
+
+        t += 2500;
+        demoDelay(function() {
+          fadeOutDemo();
+        }, t);
+
+        t += 900;
+        demoDelay(function() {
+          runDemo();
+        }, t);
+      }
+
+      if (demoEl) {
+        var demoObs = new IntersectionObserver(function(entries) {
+          if (entries[0].isIntersecting && !demoRunning) {
+            demoRunning = true;
+            runDemo();
+            demoObs.disconnect();
+          }
+        }, { threshold: 0.25 });
+        demoObs.observe(demoEl);
+      }
+    })();
+  </script>
 
 </body>
 </html>
