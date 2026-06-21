@@ -29,6 +29,8 @@ ADTP provides:
 
 **...a raw UCAN library?** UCAN gives you the token format. ADTP gives you the daemon: key management, chain verification, revocation tracking, cross-org trust, OIDC integration, and audit export. Using a UCAN library to build what ADTP does is like using `net/http` to build a web framework.
 
+**...AIP (Agent Identity Protocol)?** AIP and ADTP solve the same problem. AIP uses Biscuit tokens with Datalog policies — more expressive, with framework adapters for CrewAI, ADK, and LangChain. ADTP makes different tradeoffs: RESTRICT mode is a structural invariant (not a policy you can misconfigure), and cascade revocation is provably complete (not a 15-minute CRL polling window). If your threat model requires proving that escalation is impossible by construction and that revocation has zero gap, ADTP is built for that. AIP compatibility is on the roadmap.
+
 ## Quickstart
 
 ```bash
