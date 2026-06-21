@@ -1,24 +1,33 @@
 # ADTP — Agent Delegation and Trust Protocol
 
-> Cryptographic identity, delegation chains, and provably-complete revocation for AI agents.
-> Single binary. Apache 2.0. Built by [Zahan Turel](https://zahanturel.github.io/adtp/).
+**Every AI agent gets its own cryptographic identity. Every delegation is a signed chain. Revocation is provably complete.**
 
----
+ADTP is an open protocol and Go daemon that gives AI agents their own cryptographic identities instead of sharing human credentials. It enforces capability attenuation at the protocol level — not with policy checks, but with structural invariants that make escalation impossible.
 
-## The problem
+Single binary. No runtime dependencies. Apache 2.0.
 
-AI agents share human credentials. Delegation chains are invisible. Revocation is best-effort.
+## Why this exists
 
-When something goes wrong — and it will — there is no cryptographic record of who authorized what, to which agent, and what it was allowed to do.
+AI agents today share human credentials. When Agent A delegates to Agent B, there is no cryptographic record. When you revoke access, downstream agents keep running.
 
-## What ADTP does
+This is not a configuration problem. It is a missing protocol.
 
-- **did:key identity** per agent — no shared credentials, no service accounts
-- **UCAN credential issuance** — every delegation is cryptographically signed
-- **RESTRICT mode** — structural escalation prevention; no descendant can exceed ancestor permissions
-- **13-step chain verification** — from structural validity to cross-org policy evaluation
-- **Provably-complete cascade revocation** — a registration invariant guarantees every descendant is revoked
-- **Cross-org bilateral trust** — non-transitive, depth-bounded agreements between organizations
+ADTP provides:
+
+- **did:key/Ed25519 identity** — every agent gets its own key pair, not a shared service account
+- **UCAN credential chains** — every delegation is cryptographically signed and independently verifiable
+- **RESTRICT mode** — capabilities can only narrow at each delegation step, never widen. This is a structural invariant, not a policy check
+- **Provably-complete cascade revocation** — a registration invariant guarantees that revoking a credential kills every descendant. No orphans. Not eventual consistency — mathematical completeness
+- **13-step verification pipeline** — from chain construction through cross-org policy evaluation to audit trail
+- **Cross-org bilateral trust** — non-transitive, depth-bounded agreements between organizations without shared IAM
+
+## Why not...
+
+**...SPIFFE/SPIRE?** SPIFFE issues workload identities. ADTP issues *delegation chains*. SPIFFE tells you "this is Agent A." ADTP tells you "Agent A was authorized by Agent B, which was authorized by the platform root, with these specific capabilities, and none of them have been revoked." SPIFFE does not model capability attenuation or cascade revocation.
+
+**...OAuth2 scopes?** OAuth2 scopes are string comparisons. ADTP's RESTRICT mode is a structural property — the code was tested against 7 adversarial escalation vectors with zero bypasses. OAuth2 also has no built-in cascade revocation across delegation chains.
+
+**...a raw UCAN library?** UCAN gives you the token format. ADTP gives you the daemon: key management, chain verification, revocation tracking, cross-org trust, OIDC integration, and audit export. Using a UCAN library to build what ADTP does is like using `net/http` to build a web framework.
 
 ## Quickstart
 
@@ -26,56 +35,94 @@ When something goes wrong — and it will — there is no cryptographic record o
 git clone https://github.com/Zahanturel/adtp.git
 cd adtp && make build
 ./adtpd --config config.yaml
-# → adtpd listening on 127.0.0.1:8080
-# → generated API key: abc123...  ← copy this
+# adtpd listening on 127.0.0.1:8080
+# generated API key: <key>   <- copy this
+```
 
-# Register an agent (use the API key printed above)
+Register an agent:
+```bash
 curl -H "Authorization: Bearer <api-key>" \
   -X POST localhost:8080/v1/agents \
   -d '{"sponsor_did":"did:key:z6Mk..."}'
 ```
+
+Issue, delegate, verify, revoke:
+```bash
+# Issue a credential
+curl -X POST localhost:8080/v1/credentials \
+  -H "Authorization: Bearer <api-key>" \
+  -d '{"issuer_did":"...","audience_did":"...","capabilities":[{"resource":"*","action":"read"}]}'
+
+# Verify a chain
+curl -X POST localhost:8080/v1/verify \
+  -d '{"credential_cid":"bafy..."}'
+
+# Revoke (cascades to all descendants)
+curl -X POST localhost:8080/v1/revoke \
+  -H "Authorization: Bearer <api-key>" \
+  -d '{"credential_cid":"bafy..."}'
+```
+
+No external dependencies required — the default memory backend runs out of the box. For production, configure PostgreSQL in `config.yaml`.
+
+## API
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/v1/agents` | POST | Register a new agent identity |
+| `/v1/agents/{did}` | GET | Look up an agent by DID |
+| `/v1/credentials` | POST | Issue a UCAN credential |
+| `/v1/delegations` | POST | Delegate capabilities to another agent |
+| `/v1/verify` | POST | Verify a credential chain (13-step pipeline) |
+| `/v1/revoke` | POST | Revoke a credential (cascade to all descendants) |
+| `/v1/revocation/list` | GET | List all revoked credential CIDs |
+| `/v1/status/{cid}` | GET | Check revocation status of a credential |
+| `/health` | GET | Health check |
+
+## Security
+
+22 pre-release security findings identified and resolved. RESTRICT mode tested against 7 adversarial attack vectors — zero bypasses.
+
+The protocol specification covers 13 adversary classes and 10 security properties: [PROTOCOL.md](docs/PROTOCOL.md).
 
 ## Integration
 
 | Layer | Supported |
 |---|---|
 | Identity Provider | Entra, Okta, Auth0 via OIDC |
-| SIEM / Audit | Datadog, Splunk, Elastic via webhook |
+| Audit / SIEM | Datadog, Splunk, Elastic via webhook |
+| Storage | In-memory (default), PostgreSQL |
+| Runtime | Single static Go binary, ~15 MB |
 
-Compatible with MCP, A2A, LangGraph, and CrewAI via REST API.
-
-## Technical highlights
-
-- Go daemon, single static binary. No runtime dependencies (memory backend). Optional: PostgreSQL.
-- Ed25519 signatures, with a planned post-quantum migration path (ML-DSA-65).
-- RESTRICT mode: structural escalation prevention. No semantic comparison in the TCB.
-- Thirteen-step credential chain verification.
-- Apache 2.0 open source.
+ADTP exposes a REST API. Any agent framework with an HTTP client — MCP, A2A, LangGraph, CrewAI — can call it directly.
 
 ## Status
 
+**v0.1.0-alpha** — core protocol implemented, tested, and audited.
+
 - [x] Go daemon (12,600+ lines)
+- [x] 13-step verification pipeline
+- [x] RESTRICT mode with adversarial testing
+- [x] Cascade revocation with completeness guarantee
+- [x] OIDC integration
+- [x] SIEM webhook export
 - [ ] Python client SDK
 - [ ] TypeScript client SDK
-- [ ] Hosted option
-
-## Links
-
-- [Landing page](https://zahanturel.github.io/adtp/) — project home
-- [Protocol spec](docs/PROTOCOL.md)
-
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md). All contributors must sign the [CLA](CLA.md). CLA Assistant will prompt you on your first pull request.
+- [ ] MCP adapter
+- [ ] Hosted infrastructure (Zerith Cloud)
 
 ## Building on Windows
 
-The Makefile requires a Unix-compatible shell. Use Git Bash, WSL, or MSYS2. Alternatively, run the Go commands directly:
+The Makefile requires a Unix-compatible shell. Use Git Bash, WSL, or MSYS2. Alternatively:
 
 ```powershell
 go build -o adtpd.exe ./cmd/adtpd
 go test ./...
 ```
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). All contributors must sign the [CLA](CLA.md).
 
 ## License
 
