@@ -1327,30 +1327,43 @@
       }
 
       /* ---- Animation 1: Shared Identity ---- */
-      var anim1Played = false;
-      function playIdentityAnim() {
-        if (anim1Played) return;
-        anim1Played = true;
+      var canvas1 = document.getElementById('canvas-identity');
+      var ps1 = canvas1 ? createParticles(canvas1) : null;
+      var anim1Timer = 0;
 
-        var canvas = document.getElementById('canvas-identity');
-        var ps = createParticles(canvas);
+      function resetIdentityAnim() {
+        var origin = document.getElementById('p1-origin');
+        if (origin) origin.classList.remove('show', 'active');
+        for (var i = 1; i <= 4; i++) {
+          var g = document.getElementById('p1-g' + i);
+          if (g) { g.classList.remove('show'); g.style.transform = ''; }
+        }
+        var txt = document.getElementById('text-identity');
+        if (txt) txt.classList.remove('show');
+        if (ps1) ps1.clear();
+      }
+
+      function playIdentityAnim() {
+        clearTimeout(anim1Timer);
+        resetIdentityAnim();
+
         var stage = document.getElementById('stage-identity');
         var mobile = window.innerWidth < 768;
-
         var offsets = mobile
           ? [[-100, -90], [100, -90], [-100, 90], [100, 90]]
           : [[-220, -50], [210, -45], [-180, 60], [200, 55]];
 
-        var t = 0;
+        var t = 600;
 
-        t += 500;
         setTimeout(function() {
           show('p1-origin');
           activate('p1-origin');
-          var sr = stage.getBoundingClientRect();
-          var or2 = document.getElementById('p1-origin').getBoundingClientRect();
-          ps.ambient(or2.left - sr.left + or2.width / 2, or2.top - sr.top + or2.height / 2, 8, '#6BCB8B', 50);
-          ps.start();
+          if (ps1 && stage) {
+            var sr = stage.getBoundingClientRect();
+            var or2 = document.getElementById('p1-origin').getBoundingClientRect();
+            ps1.ambient(or2.left - sr.left + or2.width / 2, or2.top - sr.top + or2.height / 2, 8, '#6BCB8B', 50);
+            ps1.start();
+          }
         }, t);
 
         for (var i = 0; i < 4; i++) {
@@ -1360,10 +1373,12 @@
               var g = document.getElementById('p1-g' + (idx + 1));
               g.classList.add('show');
               g.style.transform = 'translate(calc(-50% + ' + offsets[idx][0] + 'px), calc(-50% + ' + offsets[idx][1] + 'px))';
-              var sr = stage.getBoundingClientRect();
-              var gr = g.getBoundingClientRect();
-              ps.ambient(gr.left - sr.left + gr.width / 2, gr.top - sr.top + gr.height / 2, 4, '#6BCB8B', 25);
-              ps.start();
+              if (ps1 && stage) {
+                var sr = stage.getBoundingClientRect();
+                var gr = g.getBoundingClientRect();
+                ps1.ambient(gr.left - sr.left + gr.width / 2, gr.top - sr.top + gr.height / 2, 4, '#6BCB8B', 25);
+                ps1.start();
+              }
             }, t);
           })(i);
         }
@@ -1372,19 +1387,34 @@
         setTimeout(function() {
           document.getElementById('text-identity').classList.add('show');
         }, t);
+
+        anim1Timer = setTimeout(playIdentityAnim, t + 3000);
       }
 
       /* ---- Animation 2: Invisible Delegation ---- */
-      var anim2Played = false;
+      var anim2Timer = 0;
+
+      function resetDelegationAnim() {
+        ['p2-a', 'p2-b', 'p2-c', 'p2-d'].forEach(function(id) {
+          var el = document.getElementById(id);
+          if (el) { el.classList.remove('show'); el.style.borderColor = ''; el.style.opacity = ''; }
+        });
+        ['p2-e1', 'p2-e2', 'p2-e3'].forEach(function(id) {
+          var el = document.getElementById(id);
+          if (el) el.classList.remove('show', 'faded');
+        });
+        var txt = document.getElementById('text-delegation');
+        if (txt) txt.classList.remove('show');
+      }
+
       function playDelegationAnim() {
-        if (anim2Played) return;
-        anim2Played = true;
+        clearTimeout(anim2Timer);
+        resetDelegationAnim();
 
         var nodes = ['p2-a', 'p2-b', 'p2-c', 'p2-d'];
         var edges = ['p2-e1', 'p2-e2', 'p2-e3'];
-        var t = 0;
+        var t = 600;
 
-        t += 400;
         setTimeout(function() { show(nodes[0]); }, t);
 
         for (var i = 0; i < edges.length; i++) {
@@ -1421,23 +1451,43 @@
         setTimeout(function() {
           document.getElementById('text-delegation').classList.add('show');
         }, t);
+
+        anim2Timer = setTimeout(playDelegationAnim, t + 3000);
       }
 
       /* ---- Animation 3: Failed Revocation ---- */
-      var anim3Played = false;
+      var canvas3 = document.getElementById('canvas-revocation');
+      var ps3 = canvas3 ? createParticles(canvas3) : null;
+      var anim3Timer = 0;
+
+      function resetRevocationAnim() {
+        ['p3-root', 'p3-a', 'p3-b', 'p3-c'].forEach(function(id) {
+          var el = document.getElementById(id);
+          if (el) el.classList.remove('show', 'active', 'danger', 'pulse-danger', 'shatter');
+        });
+        ['p3-e1', 'p3-e2', 'p3-e3'].forEach(function(id) {
+          var el = document.getElementById(id);
+          if (el) {
+            el.classList.remove('show', 'faded');
+            var fill = el.querySelector('.p-edge-fill');
+            if (fill) fill.style.background = '';
+          }
+        });
+        var txt = document.getElementById('text-revocation');
+        if (txt) txt.classList.remove('show');
+        if (ps3) ps3.clear();
+      }
+
       function playRevocationAnim() {
-        if (anim3Played) return;
-        anim3Played = true;
+        clearTimeout(anim3Timer);
+        resetRevocationAnim();
 
-        var canvas = document.getElementById('canvas-revocation');
-        var ps = createParticles(canvas);
-        var stage = document.getElementById('stage-revocation');
-
+        var canvas = canvas3;
+        var ps = ps3;
         var nodes = ['p3-root', 'p3-a', 'p3-b', 'p3-c'];
         var edges = ['p3-e1', 'p3-e2', 'p3-e3'];
-        var t = 0;
+        var t = 600;
 
-        t += 400;
         setTimeout(function() { show(nodes[0]); activate(nodes[0]); }, t);
 
         for (var i = 0; i < edges.length; i++) {
@@ -1510,6 +1560,8 @@
         setTimeout(function() {
           document.getElementById('text-revocation').classList.add('show');
         }, t);
+
+        anim3Timer = setTimeout(playRevocationAnim, t + 3000);
       }
 
       /* ---- Trigger problem animations on scroll ---- */
