@@ -209,10 +209,10 @@
     }
     .problem-canvas {
       position: absolute;
-      top: 0; left: 0;
-      width: 100%; height: 100%;
+      top: -60px; left: -100px;
+      width: calc(100% + 200px); height: calc(100% + 120px);
       pointer-events: none;
-      z-index: 2;
+      z-index: 10;
     }
     .p-card {
       background: var(--bg-card);
@@ -355,7 +355,7 @@
       width: 100%;
       height: 100%;
       pointer-events: none;
-      z-index: 1;
+      z-index: 10;
       border-radius: 16px;
     }
 
@@ -391,7 +391,9 @@
     }
     .chain-node.revoked {
       border-color: var(--red);
-      box-shadow: 0 0 24px rgba(248, 113, 113, 0.08);
+      box-shadow: 0 0 24px rgba(248, 113, 113, 0.12);
+      opacity: 0;
+      transition: opacity 0.9s ease 0.3s, border-color 0.15s ease, box-shadow 0.15s ease, transform 0.5s ease;
     }
     .chain-node.fade-out {
       opacity: 0;
@@ -473,6 +475,10 @@
     .chain-edge.show .chain-edge-fill { width: 100%; }
     .chain-edge.active .chain-edge-fill { background: var(--green); }
     .chain-edge.revoked .chain-edge-fill { background: var(--red); }
+    .chain-edge.revoked {
+      opacity: 0;
+      transition: opacity 0.6s ease 0.1s;
+    }
 
     .chain-edge-arrow {
       position: absolute;
@@ -1069,26 +1075,24 @@
 
         function resize() {
           var dpr = window.devicePixelRatio || 1;
-          var rect = canvas.parentElement.getBoundingClientRect();
+          var rect = canvas.getBoundingClientRect();
           canvas.width = rect.width * dpr;
           canvas.height = rect.height * dpr;
-          canvas.style.width = rect.width + 'px';
-          canvas.style.height = rect.height + 'px';
           ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         }
 
         function burst(cx, cy, count, color, speed) {
           for (var i = 0; i < count; i++) {
-            var a = (Math.PI * 2 * i / count) + (Math.random() - 0.5) * 1.0;
-            var v = speed * (0.2 + Math.random() * 0.8);
+            var a = Math.random() * Math.PI * 2;
+            var v = speed * (0.3 + Math.random() * 0.7);
             ps.push({
-              x: cx + (Math.random() - 0.5) * 8,
-              y: cy + (Math.random() - 0.5) * 8,
-              vx: Math.cos(a) * v,
-              vy: Math.sin(a) * v,
-              size: 1.5 + Math.random() * 2.5,
+              x: cx + (Math.random() - 0.5) * 12,
+              y: cy + (Math.random() - 0.5) * 12,
+              vx: Math.cos(a) * v + (Math.random() - 0.5) * 1.2,
+              vy: Math.sin(a) * v + (Math.random() - 0.5) * 1.2,
+              size: 1.5 + Math.random() * 3,
               color: color,
-              life: 40 + Math.floor(Math.random() * 30),
+              life: 35 + Math.floor(Math.random() * 35),
               max: 70
             });
           }
@@ -1119,9 +1123,9 @@
             var p = ps[i];
             p.x += p.vx;
             p.y += p.vy;
-            p.vx *= 0.975;
-            p.vy *= 0.975;
-            p.vy += 0.008;
+            p.vx *= 0.98;
+            p.vy *= 0.98;
+            p.vy += 0.002;
             p.life--;
             if (p.life <= 0) { ps.splice(i, 1); continue; }
             var alpha = p.life / p.max;
@@ -1130,7 +1134,7 @@
             ctx.shadowColor = p.color;
             ctx.fillStyle = p.color;
             ctx.beginPath();
-            ctx.arc(p.x, p.y, p.size * Math.min(1, alpha * 2), 0, Math.PI * 2);
+            ctx.arc(p.x, p.y, p.size * alpha, 0, Math.PI * 2);
             ctx.fill();
           }
           ctx.globalAlpha = 1;
@@ -1148,7 +1152,9 @@
 
         resize();
         window.addEventListener('resize', resize);
-        return { burst: burst, ambient: ambient, start: start, resize: resize };
+        function clear() { ps.length = 0; running = false; cancelAnimationFrame(raf); ctx.clearRect(0, 0, canvas.clientWidth, canvas.clientHeight); }
+
+        return { burst: burst, ambient: ambient, start: start, resize: resize, clear: clear };
       }
 
       var demoTimers = [];
@@ -1183,13 +1189,12 @@
           el.classList.remove('active');
           el.classList.add('revoked');
 
-          // Trigger particle burst at the element's center
-          if (demoParticles && demoEl) {
-            var demoRect = demoEl.getBoundingClientRect();
+          if (demoParticles && demoEl && el.classList.contains('chain-node')) {
+            var demoCanvas = document.getElementById('canvas-demo');
+            var canvasRect = demoCanvas.getBoundingClientRect();
             var elRect = el.getBoundingClientRect();
-            var cx = elRect.left - demoRect.left + elRect.width / 2;
-            var cy = elRect.top - demoRect.top + elRect.height / 2;
-
+            var cx = elRect.left - canvasRect.left + elRect.width / 2;
+            var cy = elRect.top - canvasRect.top + elRect.height / 2;
             demoParticles.burst(cx, cy, 48, '#F87171', 3.2);
             demoParticles.burst(cx, cy, 18, '#D4A574', 1.8);
             demoParticles.start();
@@ -1209,6 +1214,7 @@
         demoEl.querySelectorAll('.chain-node, .chain-edge').forEach(function(el) {
           el.classList.remove('show', 'active', 'revoked', 'fade-out');
         });
+        if (demoParticles) demoParticles.clear();
         setStatus('');
       }
 
@@ -1455,10 +1461,10 @@
         t += 1500;
         setTimeout(function() {
           var rootEl = document.getElementById('p3-root');
-          var sr = stage.getBoundingClientRect();
+          var cr = canvas.getBoundingClientRect();
           var rr = rootEl.getBoundingClientRect();
-          var cx = rr.left - sr.left + rr.width / 2;
-          var cy = rr.top - sr.top + rr.height / 2;
+          var cx = rr.left - cr.left + rr.width / 2;
+          var cy = rr.top - cr.top + rr.height / 2;
 
           ps.burst(cx, cy, 55, '#F87171', 3.5);
           ps.burst(cx, cy, 20, '#D4A574', 2);
@@ -1472,16 +1478,33 @@
         setTimeout(function() {
           endanger('p3-a');
           document.getElementById('p3-e2').querySelector('.p-edge-fill').style.background = 'var(--red)';
+          var cr2 = canvas.getBoundingClientRect();
+          var ar = document.getElementById('p3-a').getBoundingClientRect();
+          ps.burst(ar.left - cr2.left + ar.width / 2, ar.top - cr2.top + ar.height / 2, 40, '#F87171', 3);
+          ps.burst(ar.left - cr2.left + ar.width / 2, ar.top - cr2.top + ar.height / 2, 15, '#D4A574', 1.8);
+          ps.start();
         }, t);
 
-        t += 400;
+        t += 500;
         setTimeout(function() {
           endanger('p3-b');
           document.getElementById('p3-e3').querySelector('.p-edge-fill').style.background = 'var(--red)';
+          var cr2 = canvas.getBoundingClientRect();
+          var br = document.getElementById('p3-b').getBoundingClientRect();
+          ps.burst(br.left - cr2.left + br.width / 2, br.top - cr2.top + br.height / 2, 40, '#F87171', 3);
+          ps.burst(br.left - cr2.left + br.width / 2, br.top - cr2.top + br.height / 2, 15, '#D4A574', 1.8);
+          ps.start();
         }, t);
 
-        t += 400;
-        setTimeout(function() { endanger('p3-c'); }, t);
+        t += 500;
+        setTimeout(function() {
+          endanger('p3-c');
+          var cr2 = canvas.getBoundingClientRect();
+          var cEl = document.getElementById('p3-c').getBoundingClientRect();
+          ps.burst(cEl.left - cr2.left + cEl.width / 2, cEl.top - cr2.top + cEl.height / 2, 40, '#F87171', 3);
+          ps.burst(cEl.left - cr2.left + cEl.width / 2, cEl.top - cr2.top + cEl.height / 2, 15, '#D4A574', 1.8);
+          ps.start();
+        }, t);
 
         t += 800;
         setTimeout(function() {
