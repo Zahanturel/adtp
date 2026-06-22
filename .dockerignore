@@ -1,0 +1,11 @@
+.git
+*.exe
+*.key
+*.id
+platform.key
+api.key
+instance.id
+coverage.out
+site/
+hn-draft.md
+CLAUDE.md

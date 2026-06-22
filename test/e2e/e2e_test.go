@@ -390,6 +390,35 @@ func TestScenario_DoubleRevoke(t *testing.T) {
 	t.Log("double revoke: PASS")
 }
 
+// Scenario: "Admin reconciliation endpoint"
+// Trigger manual reconciliation and verify it returns sane numbers.
+func TestScenario_AdminReconcile(t *testing.T) {
+	d := startDaemon(t)
+
+	agent := d.registerAgent(t, "ops@zerith.sh")
+	d.issueCredential(t, agent, []map[string]any{
+		toolInvokeCap("tool://server/search"),
+	}, 3600)
+
+	var resp struct {
+		CredentialsWalked int `json:"credentials_walked"`
+		RepairsApplied    int `json:"repairs_applied"`
+		Errors            int `json:"errors"`
+	}
+	code := d.doJSON(t, "POST", "/v1/admin/reconcile", nil, &resp)
+	if code != http.StatusOK {
+		t.Fatalf("admin reconcile: got %d, want 200", code)
+	}
+	if resp.CredentialsWalked < 1 {
+		t.Fatalf("expected at least 1 credential walked, got %d", resp.CredentialsWalked)
+	}
+	if resp.Errors != 0 {
+		t.Fatalf("reconciliation errors: %d", resp.Errors)
+	}
+	t.Logf("reconcile: walked=%d repairs=%d errors=%d", resp.CredentialsWalked, resp.RepairsApplied, resp.Errors)
+	t.Log("admin reconcile: PASS")
+}
+
 // Bonus Scenario: "Revocation list is signed and public"
 func TestScenario_RevocationList(t *testing.T) {
 	d := startDaemon(t)

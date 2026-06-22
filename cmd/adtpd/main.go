@@ -30,9 +30,20 @@ import (
 	"github.com/Zahanturel/adtp/store/postgres"
 )
 
+var (
+	version = "dev"
+	commit  = "none"
+)
+
 func main() {
 	configPath := flag.String("config", "config.yaml", "path to the YAML config file")
+	showVersion := flag.Bool("version", false, "print version and exit")
 	flag.Parse()
+
+	if *showVersion {
+		fmt.Printf("adtpd %s (%s)\n", version, commit)
+		return
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

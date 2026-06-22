@@ -6,7 +6,11 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
-RUN CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o /adtpd ./cmd/adtpd
+ARG VERSION=dev
+ARG COMMIT=none
+RUN CGO_ENABLED=0 go build -trimpath \
+    -ldflags "-s -w -X main.version=${VERSION} -X main.commit=${COMMIT}" \
+    -o /adtpd ./cmd/adtpd
 
 # Minimal runtime image.
 FROM gcr.io/distroless/static-debian12
