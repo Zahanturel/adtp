@@ -1,5 +1,10 @@
 # ADTP — Agent Delegation and Trust Protocol
 
+[![CI](https://github.com/Zahanturel/adtp/actions/workflows/ci.yml/badge.svg)](https://github.com/Zahanturel/adtp/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/Zahanturel/adtp?include_prereleases&label=release)](https://github.com/Zahanturel/adtp/releases)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+[![Go Report Card](https://goreportcard.com/badge/github.com/Zahanturel/adtp)](https://goreportcard.com/report/github.com/Zahanturel/adtp)
+
 **Every AI agent gets its own cryptographic identity. Every delegation is a signed chain. Revocation is provably complete.**
 
 ADTP is an open protocol and Go daemon that gives AI agents their own cryptographic identities instead of sharing human credentials. It enforces capability attenuation at the protocol level — not with policy checks, but with structural invariants that make escalation impossible.
@@ -33,12 +38,40 @@ ADTP provides:
 
 ## Quickstart
 
+**Option A: Prebuilt binary** (fastest)
+
+Download from [Releases](https://github.com/Zahanturel/adtp/releases), unpack, and run:
+
+```bash
+./adtpd --config config.yaml
+```
+
+**Option B: go install**
+
+```bash
+go install github.com/Zahanturel/adtp/cmd/adtpd@v0.1.0-alpha
+adtpd --config config.yaml
+```
+
+**Option C: Build from source**
+
 ```bash
 git clone https://github.com/Zahanturel/adtp.git
 cd adtp && make build
 ./adtpd --config config.yaml
-# adtpd listening on 127.0.0.1:8080
-# generated API key: <key>   <- copy this
+```
+
+**Option D: Docker**
+
+```bash
+docker build -t adtpd .
+docker run -p 8080:8080 -e ADTP_SERVER_HOST=0.0.0.0 -v adtp-data:/data adtpd
+```
+
+The daemon generates a platform key and API key on first run:
+```
+adtpd listening on 127.0.0.1:8080
+generated API key: <key>   <- copy this
 ```
 
 Register an agent:

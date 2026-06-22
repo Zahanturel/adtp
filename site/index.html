@@ -797,8 +797,8 @@
         <div class="hero-cta">
           <div class="code-pill">
             <span class="code-pill-prompt">$</span>
-            <span class="code-pill-text">git clone https://github.com/Zahanturel/adtp.git</span>
-            <button class="code-pill-copy" data-copy="git clone https://github.com/Zahanturel/adtp.git" aria-label="Copy to clipboard">
+            <span class="code-pill-text">go install github.com/Zahanturel/adtp/cmd/adtpd@latest</span>
+            <button class="code-pill-copy" data-copy="go install github.com/Zahanturel/adtp/cmd/adtpd@latest" aria-label="Copy to clipboard">
               <svg class="icon-copy" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5.5" y="2.5" width="8" height="10" rx="1"/><path d="M3.5 5.5v7a1 1 0 001 1h7"/></svg>
               <svg class="icon-check" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5l3.5 3.5L13 5"/></svg>
             </button>
@@ -1004,6 +1004,7 @@
       <p>Apache 2.0 license. Open source.</p>
       <div class="footer-links">
         <a href="https://github.com/Zahanturel/adtp" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://github.com/Zahanturel/adtp/releases" target="_blank" rel="noopener">Releases</a>
         <a href="https://github.com/Zahanturel/adtp/blob/main/docs/PROTOCOL.md" target="_blank" rel="noopener">Protocol</a>
         <a href="https://www.apache.org/licenses/LICENSE-2.0" target="_blank" rel="noopener">License</a>
       </div>
@@ -1049,7 +1050,7 @@
 
       // ---- Copy to clipboard ----
       var COPY_TEXTS = {
-        quickstart: 'git clone https://github.com/Zahanturel/adtp.git\ncd adtp && make build\n./adtpd --config config.yaml'
+        quickstart: 'git clone https://github.com/Zahanturel/adtp.git\ncd adtp && make build\n./adtpd --config config.yaml\n\n# Or: go install github.com/Zahanturel/adtp/cmd/adtpd@latest'
       };
 
       document.querySelectorAll('.code-pill-copy').forEach(function(btn) {
