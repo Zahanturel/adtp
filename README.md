@@ -106,6 +106,8 @@ curl -X POST localhost:8080/v1/revoke \
 
 No external dependencies required — the default memory backend runs out of the box. For production, configure PostgreSQL in `config.yaml`.
 
+See [`examples/`](examples/) for runnable demos — a [bash quickstart](examples/quickstart/demo.sh) and an [MCP tool authorization](examples/mcp-tool-auth/) example in Python.
+
 ## API
 
 | Endpoint | Method | Description |
