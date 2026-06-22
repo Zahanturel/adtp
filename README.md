@@ -50,19 +50,25 @@ curl -H "Authorization: Bearer <api-key>" \
 
 Issue, delegate, verify, revoke:
 ```bash
-# Issue a credential
+# Issue a root credential (expires in 1 hour)
 curl -X POST localhost:8080/v1/credentials \
   -H "Authorization: Bearer <api-key>" \
-  -d '{"issuer_did":"...","audience_did":"...","capabilities":[{"resource":"*","action":"read"}]}'
+  -d '{"agent_did":"<agent-did>","capabilities":[{"can":"tool/invoke","with":"tool://example/*"}],"exp_seconds":3600}'
 
-# Verify a chain
+# Delegate with RESTRICT (narrows to read-only, depth_left=3)
+curl -X POST localhost:8080/v1/delegations \
+  -H "Authorization: Bearer <api-key>" \
+  -d '{"parent_cid":"<cid>","audience_did":"<did>","mode":"restrict","depth_left":3,"caveats":[{"type":"resource_restrict","resource":"tool://example/query"}]}'
+
+# Verify a chain against a specific action
 curl -X POST localhost:8080/v1/verify \
-  -d '{"credential_cid":"bafy..."}'
+  -H "Authorization: Bearer <api-key>" \
+  -d '{"chain":["<leaf-cid>"],"action":"tool/invoke","resource":"tool://example/query"}'
 
 # Revoke (cascades to all descendants)
 curl -X POST localhost:8080/v1/revoke \
   -H "Authorization: Bearer <api-key>" \
-  -d '{"credential_cid":"bafy..."}'
+  -d '{"subject_cid":"<cid>","scope":"CREDENTIAL","status":"COMPROMISED"}'
 ```
 
 No external dependencies required — the default memory backend runs out of the box. For production, configure PostgreSQL in `config.yaml`.

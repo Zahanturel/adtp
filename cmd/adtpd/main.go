@@ -22,6 +22,7 @@ import (
 	v1 "github.com/Zahanturel/adtp/api/v1"
 	"github.com/Zahanturel/adtp/config"
 	"github.com/Zahanturel/adtp/internal/identity"
+	"github.com/Zahanturel/adtp/internal/revocation"
 	"github.com/Zahanturel/adtp/internal/siem"
 	"github.com/Zahanturel/adtp/internal/verify"
 	"github.com/Zahanturel/adtp/store"
@@ -63,6 +64,15 @@ func runServer(ctx context.Context, cfg *config.Config, logger *slog.Logger) err
 		return err
 	}
 	defer st.Close()
+
+	// Reconcile the registration index on startup to backfill any entries
+	// missed by a prior crash between PutCredential and Register.
+	report, err := revocation.Reconcile(ctx, st, st, st.Audit())
+	if err != nil {
+		logger.Warn("startup reconciliation failed", "error", err)
+	} else if report.RepairsApplied > 0 {
+		logger.Info("startup reconciliation", "walked", report.CredentialsWalked, "repairs", report.RepairsApplied, "errors", report.Errors)
+	}
 
 	srv := &http.Server{
 		Addr:              cfg.Addr(),
