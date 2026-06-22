@@ -22,6 +22,9 @@ verify:
   # revocation source is unavailable (denies); MEDIUM/LOW/ANALYTICS degrade-accept
   # (fail open) on lookup errors. Default HIGH so revocation is fail-closed.
   default_risk_tier: HIGH
+  # Periodic registration-index reconciliation. 0 disables (startup reconciliation
+  # still runs). Set to 15 for production deployments.
+  reconcile_interval_minutes: 0
 
 auth:
   mode: api_key            # "api_key" (default) or "oidc"

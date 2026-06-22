@@ -15,6 +15,7 @@ func NewRouter(svc *Service) http.Handler {
 	mux.HandleFunc("GET /v1/status/{cid}", handleGetStatus(svc))
 	mux.HandleFunc("GET /v1/agents/{did}", handleGetAgent(svc))
 	mux.HandleFunc("GET /health", handleHealth(svc))
+	mux.HandleFunc("POST /v1/admin/reconcile", handleReconcile(svc))
 
 	var h http.Handler = svc.authGate()(mux)
 	if rps := svc.Config.Server.RateLimitRPS; rps > 0 {

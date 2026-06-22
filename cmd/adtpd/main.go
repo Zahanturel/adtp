@@ -74,6 +74,28 @@ func runServer(ctx context.Context, cfg *config.Config, logger *slog.Logger) err
 		logger.Info("startup reconciliation", "walked", report.CredentialsWalked, "repairs", report.RepairsApplied, "errors", report.Errors)
 	}
 
+	if mins := cfg.Verify.ReconcileIntervalMinutes; mins > 0 {
+		interval := time.Duration(mins) * time.Minute
+		go func() {
+			ticker := time.NewTicker(interval)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-ticker.C:
+					r, err := revocation.Reconcile(ctx, st, st, st.Audit())
+					if err != nil {
+						logger.Warn("periodic reconciliation failed", "error", err)
+					} else if r.RepairsApplied > 0 {
+						logger.Info("periodic reconciliation", "walked", r.CredentialsWalked, "repairs", r.RepairsApplied, "errors", r.Errors)
+					}
+				}
+			}
+		}()
+		logger.Info("periodic reconciliation enabled", "interval_minutes", mins)
+	}
+
 	srv := &http.Server{
 		Addr:              cfg.Addr(),
 		Handler:           v1.NewRouter(svc),

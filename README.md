@@ -85,7 +85,10 @@ No external dependencies required — the default memory backend runs out of the
 | `/v1/revoke` | POST | Revoke a credential (cascade to all descendants) |
 | `/v1/revocation/list` | GET | List all revoked credential CIDs |
 | `/v1/status/{cid}` | GET | Check revocation status of a credential |
+| `/v1/admin/reconcile` | POST | Manually trigger registration index reconciliation |
 | `/health` | GET | Health check |
+
+See [CAPABILITIES.md](CAPABILITIES.md) for the full reference on actions, constraint types, and caveat types.
 
 ## Security
 

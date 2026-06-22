@@ -91,6 +91,10 @@ type VerifyConfig struct {
 	MaxChainDepth    int    `yaml:"max_chain_depth"`
 	ClockSkewSeconds int64  `yaml:"clock_skew_seconds"`
 	DefaultRiskTier  string `yaml:"default_risk_tier"`
+	// ReconcileIntervalMinutes sets how often the daemon re-checks the
+	// registration index for missed entries. 0 disables periodic reconciliation
+	// (startup reconciliation still runs). Default: 0 (disabled).
+	ReconcileIntervalMinutes int `yaml:"reconcile_interval_minutes"`
 }
 
 // Config errors.

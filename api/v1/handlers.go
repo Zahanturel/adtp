@@ -518,6 +518,22 @@ func handleHealth(svc *Service) http.HandlerFunc {
 	}
 }
 
+func handleReconcile(svc *Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		report, err := revocation.Reconcile(r.Context(), svc.Store, svc.Store, svc.auditLog())
+		if err != nil {
+			svc.failErr(w, http.StatusInternalServerError, "", "reconciliation failed", err)
+			return
+		}
+		svc.log().Info("manual reconciliation", "walked", report.CredentialsWalked, "repairs", report.RepairsApplied, "errors", report.Errors)
+		writeJSON(w, http.StatusOK, map[string]any{
+			"credentials_walked": report.CredentialsWalked,
+			"repairs_applied":    report.RepairsApplied,
+			"errors":             report.Errors,
+		})
+	}
+}
+
 // --- internal helpers ---
 
 func (svc *Service) verifierConfig() *verify.VerifierConfig {
