@@ -4,7 +4,7 @@
 [![Release](https://img.shields.io/github/v/release/Zahanturel/adtp?include_prereleases&label=release)](https://github.com/Zahanturel/adtp/releases)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
-**Every AI agent gets its own cryptographic identity. Every delegation is a signed chain. Revocation is provably complete.**
+**Every AI agent gets its own cryptographic identity. Every delegation is a signed chain. Revocation is guaranteed complete by construction.**
 
 ADTP is an open protocol and Go daemon that gives AI agents their own cryptographic identities instead of sharing human credentials. It enforces capability attenuation at the protocol level — not with policy checks, but with structural invariants that make escalation impossible.
 
@@ -23,7 +23,7 @@ ADTP provides:
 - **did:key/Ed25519 identity** — every agent gets its own key pair, not a shared service account
 - **UCAN credential chains** — every delegation is cryptographically signed and independently verifiable
 - **RESTRICT mode** — capabilities can only narrow at each delegation step, never widen. This is a structural invariant, not a policy check
-- **Provably-complete cascade revocation** — a registration invariant guarantees that revoking a credential kills every descendant. No orphans. Not eventual consistency — mathematical completeness
+- **Cascade revocation guaranteed by construction** — a registration invariant ensures every authorized chain is indexed; revoking a credential cascades to all descendants. No orphans, no polling window
 - **13-step verification pipeline** — from chain construction through cross-org policy evaluation to audit trail
 - **Cross-org bilateral trust** — non-transitive, depth-bounded agreements between organizations without shared IAM
 
@@ -35,7 +35,7 @@ ADTP provides:
 
 **...a raw UCAN library?** UCAN gives you the token format. ADTP gives you the daemon: key management, chain verification, revocation tracking, cross-org trust, OIDC integration, and audit export. Using a UCAN library to build what ADTP does is like using `net/http` to build a web framework.
 
-**...AIP (Agent Identity Protocol)?** AIP and ADTP solve the same problem. AIP uses Biscuit tokens with Datalog policies — more expressive, with framework adapters for CrewAI, ADK, and LangChain. ADTP makes different tradeoffs: RESTRICT mode is a structural invariant (not a policy you can misconfigure), and cascade revocation is provably complete (not a 15-minute CRL polling window). If your threat model requires proving that escalation is impossible by construction and that revocation has zero gap, ADTP is built for that. AIP compatibility is on the roadmap.
+**...AIP (Agent Identity Protocol)?** AIP and ADTP solve the same problem. AIP uses Biscuit tokens with Datalog policies — more expressive, with framework adapters for CrewAI, ADK, and LangChain. ADTP makes different tradeoffs: RESTRICT mode is a structural invariant (not a policy you can misconfigure), and cascade revocation is guaranteed complete by construction (not a 15-minute CRL polling window). If your threat model requires that escalation is impossible by construction and that revocation has zero gap, ADTP is built for that. AIP compatibility is on the roadmap.
 
 ## Quickstart
 
