@@ -11,6 +11,8 @@ ADTP is an open protocol and Go daemon that gives AI agents their own cryptograp
 
 Single binary. No runtime dependencies. Apache 2.0.
 
+ADTP is the open protocol; **Zerith** is the company and infrastructure built on top of it.
+
 ## Why this exists
 
 AI agents today share human credentials. When Agent A delegates to Agent B, there is no cryptographic record. When you revoke access, downstream agents keep running.
