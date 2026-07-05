@@ -3,7 +3,6 @@
 [![CI](https://github.com/Zahanturel/adtp/actions/workflows/ci.yml/badge.svg)](https://github.com/Zahanturel/adtp/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/Zahanturel/adtp?include_prereleases&label=release)](https://github.com/Zahanturel/adtp/releases)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Go Report Card](https://goreportcard.com/badge/github.com/Zahanturel/adtp)](https://goreportcard.com/report/github.com/Zahanturel/adtp)
 
 **Every AI agent gets its own cryptographic identity. Every delegation is a signed chain. Revocation is provably complete.**
 
