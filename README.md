@@ -158,6 +158,13 @@ ADTP exposes a REST API. Any agent framework with an HTTP client — MCP, A2A, L
 - [ ] MCP adapter
 - [ ] Hosted infrastructure (Zerith Cloud)
 
+**Planned for v0.2:**
+
+- [ ] Event-driven revocation reconciliation
+- [ ] HSM-backed key custody
+- [ ] Budget metering caveats
+- [ ] Expanded fuzz test coverage
+
 ## Building on Windows
 
 The Makefile requires a Unix-compatible shell. Use Git Bash, WSL, or MSYS2. Alternatively:
@@ -174,3 +181,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). All contributors must sign the [CLA](CLA
 ## License
 
 [Apache 2.0](LICENSE)
+
+---
+
+Built by [Zahan Turel](https://github.com/Zahanturel).
