@@ -72,7 +72,7 @@ store/              Storage interface
   postgres/         PostgreSQL backend (production)
 pkg/adtp/           Public API types (request/response structs)
 test/e2e/           End-to-end test scenarios
-site/               Landing page (zerith.sh)
+site/               Landing page (zahanturel.github.io/adtp/)
 ```
 
 ## Security
