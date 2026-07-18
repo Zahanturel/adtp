@@ -12,7 +12,7 @@ import (
 func TestStress_ConcurrentVerification(t *testing.T) {
 	d := startDaemon(t)
 
-	agent := d.registerAgent(t, "stress@zerith.sh")
+	agent := d.registerAgent(t, "stress@example.com")
 	cid, _ := d.issueCredential(t, agent, []map[string]any{
 		toolInvokeCap("tool://server/*"),
 	}, 3600)
@@ -69,8 +69,8 @@ func TestStress_ConcurrentVerification(t *testing.T) {
 func TestStress_ConcurrentVerifyAfterRevoke(t *testing.T) {
 	d := startDaemon(t)
 
-	agentA := d.registerAgent(t, "stress@zerith.sh")
-	agentB := d.registerAgent(t, "stress@zerith.sh")
+	agentA := d.registerAgent(t, "stress@example.com")
+	agentB := d.registerAgent(t, "stress@example.com")
 
 	rootCID, _ := d.issueCredential(t, agentA, []map[string]any{
 		toolInvokeCap("tool://server/*"),

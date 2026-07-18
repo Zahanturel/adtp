@@ -109,9 +109,9 @@ func TestScenario_DelegationChain(t *testing.T) {
 func TestScenario_CascadeRevocation(t *testing.T) {
 	d := startDaemon(t)
 
-	agentA := d.registerAgent(t, "platform@zerith.sh")
-	agentB := d.registerAgent(t, "platform@zerith.sh")
-	agentC := d.registerAgent(t, "platform@zerith.sh")
+	agentA := d.registerAgent(t, "platform@example.com")
+	agentB := d.registerAgent(t, "platform@example.com")
+	agentC := d.registerAgent(t, "platform@example.com")
 
 	// Platform -> Agent A (must include agent/delegate for sub-delegation)
 	rootCID, _ := d.issueCredential(t, agentA, []map[string]any{
@@ -296,9 +296,9 @@ func TestScenario_ExpiredCredential(t *testing.T) {
 func TestScenario_CaveatAccumulation(t *testing.T) {
 	d := startDaemon(t)
 
-	agentA := d.registerAgent(t, "ops@zerith.sh")
-	agentB := d.registerAgent(t, "ops@zerith.sh")
-	agentC := d.registerAgent(t, "ops@zerith.sh")
+	agentA := d.registerAgent(t, "ops@example.com")
+	agentB := d.registerAgent(t, "ops@example.com")
+	agentC := d.registerAgent(t, "ops@example.com")
 
 	// Platform -> Agent A (broad capability + delegation rights)
 	rootCID, _ := d.issueCredential(t, agentA, []map[string]any{
@@ -362,7 +362,7 @@ func TestScenario_CaveatAccumulation(t *testing.T) {
 func TestScenario_DoubleRevoke(t *testing.T) {
 	d := startDaemon(t)
 
-	agent := d.registerAgent(t, "ops@zerith.sh")
+	agent := d.registerAgent(t, "ops@example.com")
 	cid, _ := d.issueCredential(t, agent, []map[string]any{
 		toolInvokeCap("tool://server/search"),
 	}, 3600)
@@ -395,7 +395,7 @@ func TestScenario_DoubleRevoke(t *testing.T) {
 func TestScenario_AdminReconcile(t *testing.T) {
 	d := startDaemon(t)
 
-	agent := d.registerAgent(t, "ops@zerith.sh")
+	agent := d.registerAgent(t, "ops@example.com")
 	d.issueCredential(t, agent, []map[string]any{
 		toolInvokeCap("tool://server/search"),
 	}, 3600)
@@ -423,7 +423,7 @@ func TestScenario_AdminReconcile(t *testing.T) {
 func TestScenario_RevocationList(t *testing.T) {
 	d := startDaemon(t)
 
-	agent := d.registerAgent(t, "ops@zerith.sh")
+	agent := d.registerAgent(t, "ops@example.com")
 	cid, _ := d.issueCredential(t, agent, []map[string]any{
 		toolInvokeCap("tool://x"),
 	}, 3600)
