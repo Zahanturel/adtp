@@ -21,9 +21,9 @@ import (
 
 // Store errors.
 var (
-	ErrAgentNotFound     = errors.New("agent not found")
+	ErrAgentNotFound      = errors.New("agent not found")
 	ErrCredentialNotFound = errors.New("credential not found")
-	ErrInvalidAgent      = errors.New("invalid agent")
+	ErrInvalidAgent       = errors.New("invalid agent")
 )
 
 // AgentStore persists agents and their lifecycle state.

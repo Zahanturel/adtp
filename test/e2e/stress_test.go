@@ -27,10 +27,10 @@ func TestStress_ConcurrentVerification(t *testing.T) {
 	const requestsPerWorker = 20
 
 	var (
-		wg       sync.WaitGroup
-		passed   atomic.Int64
-		failed   atomic.Int64
-		errored  atomic.Int64
+		wg      sync.WaitGroup
+		passed  atomic.Int64
+		failed  atomic.Int64
+		errored atomic.Int64
 	)
 
 	start := time.Now()

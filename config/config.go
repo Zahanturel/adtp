@@ -99,13 +99,13 @@ type VerifyConfig struct {
 
 // Config errors.
 var (
-	ErrInvalidPort    = errors.New("invalid server port")
-	ErrInvalidBackend = errors.New("invalid store backend")
-	ErrMissingDSN     = errors.New("postgres backend requires a connection string")
-	ErrInvalidAuthMode  = errors.New("invalid auth mode")
-	ErrIncompleteOIDC   = errors.New("oidc auth requires issuer, audience, and jwks_url")
-	ErrInvalidRiskTier  = errors.New("invalid risk tier (must be HIGH, MEDIUM, LOW, or ANALYTICS)")
-	ErrIncompleteTLS    = errors.New("tls_cert and tls_key must both be set")
+	ErrInvalidPort     = errors.New("invalid server port")
+	ErrInvalidBackend  = errors.New("invalid store backend")
+	ErrMissingDSN      = errors.New("postgres backend requires a connection string")
+	ErrInvalidAuthMode = errors.New("invalid auth mode")
+	ErrIncompleteOIDC  = errors.New("oidc auth requires issuer, audience, and jwks_url")
+	ErrInvalidRiskTier = errors.New("invalid risk tier (must be HIGH, MEDIUM, LOW, or ANALYTICS)")
+	ErrIncompleteTLS   = errors.New("tls_cert and tls_key must both be set")
 )
 
 // Default returns the built-in defaults.

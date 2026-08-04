@@ -539,11 +539,11 @@ func handleReconcile(svc *Service) http.HandlerFunc {
 func (svc *Service) verifierConfig() *verify.VerifierConfig {
 	tier := parseTier(svc.Config.Verify.DefaultRiskTier)
 	return &verify.VerifierConfig{
-		VerifierDID:      svc.PlatformDID,
-		TrustedRootDIDs:  map[string]bool{svc.PlatformDID: true},
-		MaxChainDepth:    svc.Config.Verify.MaxChainDepth,
-		ClockSkewSeconds: svc.Config.Verify.ClockSkewSeconds,
-		RiskTierFn:       func(string) verify.RiskTier { return tier },
+		VerifierDID:       svc.PlatformDID,
+		TrustedRootDIDs:   map[string]bool{svc.PlatformDID: true},
+		MaxChainDepth:     svc.Config.Verify.MaxChainDepth,
+		ClockSkewSeconds:  svc.Config.Verify.ClockSkewSeconds,
+		RiskTierFn:        func(string) verify.RiskTier { return tier },
 		ProofStore:        svc.Store,
 		RevocationCache:   svc.Store,
 		RegistrationStore: svc.Store,

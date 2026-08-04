@@ -75,7 +75,8 @@ func TestComputeCIDEmptyVector(t *testing.T) {
 
 func TestComputeCIDDeterministic(t *testing.T) {
 	data := []byte("repeatable")
-	cid1, cid2 := ComputeCID(data), ComputeCID(data); if cid1 != cid2 {
+	cid1, cid2 := ComputeCID(data), ComputeCID(data)
+	if cid1 != cid2 {
 		t.Errorf("ComputeCID is not deterministic")
 	}
 }
