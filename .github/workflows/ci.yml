@@ -1,5 +1,18 @@
 name: CI
-on: [push, pull_request]
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -8,12 +21,14 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      - run: go vet ./...
-      - run: go test -race -coverprofile=coverage.out ./...
+          cache: true
+      - run: go build -v ./...
+      - run: go test -race -coverprofile=coverage.out -covermode=atomic ./...
       - uses: actions/upload-artifact@v4
         with:
           name: coverage
           path: coverage.out
+
   e2e:
     runs-on: ubuntu-latest
     steps:
@@ -21,7 +36,9 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+          cache: true
       - run: go test -tags e2e -race ./test/e2e/...
+
   lint:
     runs-on: ubuntu-latest
     steps:
@@ -29,8 +46,28 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+          cache: true
+
+      - name: gofmt
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "The following files are not gofmt'd:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: Verify dependencies are tidy
+        run: |
+          go mod tidy
+          git diff --exit-code go.mod go.sum
+
       - run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.8
       - run: golangci-lint run ./...
+
   postgres-integration:
     runs-on: ubuntu-latest
     services:
@@ -51,7 +88,24 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+          cache: true
       - name: Run postgres integration tests
         env:
           ADTP_TEST_POSTGRES_DSN: postgres://postgres:testpass@localhost:5432/adtp_test
         run: go test -v -tags integration ./store/postgres/...
+
+  # Reports newly-disclosed CVEs in dependencies, so this job can turn red
+  # without any change to this repository. Keep it OFF the required-checks
+  # list in branch protection so an upstream advisory cannot block a merge.
+  vulncheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
