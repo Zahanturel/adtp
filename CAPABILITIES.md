@@ -14,21 +14,56 @@ Capabilities use a `can` field to specify the permitted action.
 | `agent/delegate` | Create a sub-delegation chain |
 | `api/call` | Call an external API endpoint |
 
-Actions follow a `namespace/verb` convention. Unknown actions are passed through and matched literally at verification time.
+This is a **closed set**. An unknown action is not passed through — `Capability.Validate` rejects it at issuance with `unknown capability type`, and adding an action requires a `ucv` version bump ([`internal/credential/capability.go`](internal/credential/capability.go)).
 
 ## Resource URIs (`with`)
 
-The `with` field is a URI that scopes where the action applies. ADTP supports glob-style matching:
+The `with` field is a canonical URI scoping where the action applies. It must be in
+`scheme://authority[/path]` form; the daemon canonicalizes and re-checks it, rejecting
+anything that is not already canonical.
+
+Matching is **positional and segment-counted**, not prefix-based. A `*` segment matches
+exactly one non-empty segment. `**` is reserved and unsupported, so coverage never spans
+more segments than the parent specifies:
 
 ```
-tool://search.example/query      exact tool
-tool://search.example/*          all tools on that server
-resource://db.example/customers  exact resource
-resource://db.example/*          all resources on that server
-*                                any resource (root credentials only)
+URICovers("tool://x/*",   "tool://x/a")     = true    one segment matches one segment
+URICovers("tool://x/*",   "tool://x/a/b")   = false   deeper path is NOT covered
+URICovers("tool://x/*",   "tool://x/")      = false   the wildcard needs a non-empty segment
+URICovers("tool://x",     "tool://x/a")     = false   segment counts differ
+URICovers("tool://x/a/*", "tool://x/a/b")   = true
+URICovers("tool://x/*/c", "tool://x/b/c")   = true    wildcards may sit mid-path
+URICovers("tool://x/*",   "tool://y/a")     = false   authority must be equal
 ```
 
-At verification step 9 (Authorization), the requested resource must be covered by the capability's `with` URI. Coverage rules: an exact URI covers itself; a `*` suffix covers any path under the prefix.
+A bare `*` is **not** a valid `with` value — it fails canonicalization
+(`expected scheme://authority form`). There is no "any resource" wildcard.
+
+At **verification step 8** (Authorization) the requested resource must be covered by the
+matched capability's `with`. Any URI that fails canonicalization causes coverage to return
+false, so malformed input fails closed.
+
+## Metering is not implemented — three types always deny
+
+Three of the types below need a metering or enforcement backend that this build does not
+have. `MeteringEnabled` is hardcoded `false` in the daemon
+([`api/v1/handlers.go`](api/v1/handlers.go)), and the verifier **fails closed** rather than
+treating an unenforceable restriction as unrestricted
+([`internal/verify/steps.go`](internal/verify/steps.go)):
+
+| Type | Behaviour today |
+|---|---|
+| `budget` | Always denies with `CAPABILITY_INSUFFICIENT` |
+| `max_calls` | Always denies with `CAPABILITY_INSUFFICIENT` |
+| `parameter_schema` | Always denies with `CAPABILITY_INSUFFICIENT` |
+
+A delegation whose **only** restriction is one of these is therefore unusable: it will be
+issued successfully and then denied at every invocation. This is deliberate — silently
+accepting a budget-restricted delegation as unrestricted would be the more dangerous
+failure — but it looks like a bug from the outside, so it is stated here.
+
+They remain documented because the wire format is stable and signatures over them verify;
+only enforcement is missing. Metering is on the v0.2 roadmap.
 
 ## Constraint Types
 
@@ -49,7 +84,7 @@ Restricts when the capability is valid.
 
 ### `budget`
 
-Meters cumulative usage along a delegation path. Requires metering to be enabled.
+Meters cumulative usage along a delegation path. **Not enforced in this build — always denies.** See "Metering is not implemented" above.
 
 ```json
 {"type": "budget", "dim": "tokens", "limit": 10000, "scope": "leaf", "meter": "verifier"}
@@ -78,7 +113,7 @@ Bounds a single invocation parameter per-call (distinct from cumulative budget).
 
 ### `parameter_schema`
 
-Pins the shape of invocation parameters. Compared by deep equality in v0.x.
+Pins the shape of invocation parameters. Compared by deep equality in v0.x. **Not enforced in this build — always denies.** See "Metering is not implemented" above.
 
 ```json
 {"type": "parameter_schema", "schema": {"type": "object", "properties": {"query": {"type": "string"}}}}
@@ -102,7 +137,7 @@ Bounds further delegation depth. Used on `agent/delegate` capabilities to set th
 
 ## Caveat Types (RESTRICT mode)
 
-Caveats are used in RESTRICT mode delegations. They can only add restrictions, never remove them. Every caveat from every block in the chain is evaluated at verification step 8.
+Caveats are used in RESTRICT mode delegations. They can only add restrictions, never remove them. Every caveat from every block in the chain is evaluated at verification step 8 — a child cannot drop a parent's caveat by omitting it, because the parent block is still walked.
 
 ### `time_window`
 
@@ -138,7 +173,7 @@ Restricts the allowed methods or operations.
 
 ### `max_calls`
 
-Rate-limits invocations. Requires metering to be enabled.
+Rate-limits invocations. **Not enforced in this build — always denies.** See "Metering is not implemented" above.
 
 ```json
 {"type": "max_calls", "limit": 100}
