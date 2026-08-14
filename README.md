@@ -214,6 +214,14 @@ cd adtp && go build -o adtpd ./cmd/adtpd
 ./adtpd --config config.yaml
 ```
 
+Or install a tagged build. `v0.1.0` is this release; `v0.1.0-alpha` is the earlier
+prerelease and predates the corrections described in
+[SECURITY_AUDIT.md](SECURITY_AUDIT.md):
+
+```bash
+go install github.com/Zahanturel/adtp/cmd/adtpd@v0.1.0
+```
+
 On first run the daemon generates a platform key and an API key, and tells you where:
 
 ```

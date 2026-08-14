@@ -15,9 +15,9 @@ Nothing here is softened. Several findings remain open.
 |---|---|
 | Findings resolved | 3 |
 | Findings open | 8 |
-| Findings withdrawn as incorrect | 1 |
+| Findings withdrawn as incorrect | 2 |
 | Claims verified | 4 (2 confirmed, 2 partial) |
-| Public claims cut or qualified | 15 |
+| Public claims cut or qualified | 14 |
 
 ## The four core claims
 
@@ -136,15 +136,24 @@ promoted in `go.mod`.
 
 ### Withdrawn
 
-**F10 — "golangci-lint v1.64.8 cannot parse a `go 1.26` directive."** **This finding was
-wrong.** It was reported with a hedge ("I did not run it") but asserted as a mechanical
-incompatibility. Empirically, v1.64.8 runs clean against `go 1.26.5` across the whole
-repository — exit 0, zero findings. The lint job was green, not red.
+Two findings were wrong, and both failed the same way: an empirical claim was asserted
+without being run. They are kept here rather than deleted, because an audit that quietly
+drops its own errors is not one you should trust.
+
+**F10 — "golangci-lint v1.64.8 cannot parse a `go 1.26` directive."** **Wrong.** It was
+reported with a hedge ("I did not run it") but asserted as a mechanical incompatibility.
+Empirically, v1.64.8 runs clean against `go 1.26.5` across the whole repository — exit 0,
+zero findings. The lint job was green, not red.
 
 The linter was upgraded to v2.12.2 anyway, for the defensible reason that the v1 series is
 end-of-life. v2 folds the former `stylecheck` and `quickfix` linters into `staticcheck` and
 surfaced 11 previously unchecked findings; 9 were fixed, and 2 (`ST1003`, `QF1001`) are
 excluded in `.golangci.yml` with reasons recorded inline.
+
+**F13 — "No tags or releases exist, so the documented `go install` command fails."**
+**Wrong.** `git tag` was never run. The tag `v0.1.0-alpha` exists on the remote at
+`27d07ed`, with a GitHub prerelease published 2026-06-22, and the command works. The README
+line was cut on that false premise and has been restored.
 
 ### Open
 
@@ -236,7 +245,7 @@ Every row was cut or qualified.
 | "Identity Provider: Entra, Okta, Auth0 via OIDC" | RS256 against a static JWKS; never tested against a live IdP | Qualified |
 | "Audit/SIEM: Datadog, Splunk, Elastic via webhook" | Generic batched JSON POST, no vendor specifics | Qualified |
 | "7 adversarial escalation vectors" | Accurate, but RESTRICT-only | Qualified |
-| `go install …@v0.1.0-alpha` | No tags or releases exist; the command fails | Removed |
+| `go install …@v0.1.0-alpha` | Audited as "no tags exist"; **that audit finding was wrong** — the tag and a published prerelease both exist and the command works | Restored, pointing at `v0.1.0` |
 | Revoke example `"scope":"CREDENTIAL"` | Scope constants are lowercase; returns 403 | Fixed, and the casing pitfall called out |
 
 ### Documentation errors found while correcting the above
