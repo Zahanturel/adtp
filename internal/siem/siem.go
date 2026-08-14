@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 // Package siem batches audit events and exports them to an external HTTP sink
 // (Datadog, Splunk, Elastic, or any webhook). It is best-effort and out of the
 // authorization hot path: export failures never affect verification or the
@@ -161,7 +163,7 @@ func (e *Exporter) post(batch []audit.AuditEntry) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode >= 300 {
 		return fmt.Errorf("siem webhook returned status %d", resp.StatusCode)
 	}

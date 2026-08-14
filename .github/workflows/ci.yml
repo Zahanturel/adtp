@@ -67,7 +67,10 @@ jobs:
           go mod tidy
           git diff --exit-code go.mod go.sum
 
-      - run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.8
+      # v2 is the maintained line; the v1 series is end-of-life. Note the /v2
+      # module path — installing the v1 path silently gets you a v1 binary,
+      # which cannot parse the v2 .golangci.yml schema.
+      - run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2
       - run: golangci-lint run ./...
 
   postgres-integration:

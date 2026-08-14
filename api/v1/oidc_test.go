@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 package v1
 
 import (
@@ -127,7 +129,7 @@ func TestOIDCVerifyRejections(t *testing.T) {
 func TestOIDCVerifyOverHTTPJWKS(t *testing.T) {
 	key, _ := rsa.GenerateKey(rand.Reader, 2048)
 	jwks := fmt.Sprintf(`{"keys":[{"kty":"RSA","kid":"k1","n":%q,"e":%q}]}`,
-		b64url(key.PublicKey.N.Bytes()), b64url(big.NewInt(int64(key.PublicKey.E)).Bytes()))
+		b64url(key.N.Bytes()), b64url(big.NewInt(int64(key.E)).Bytes()))
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		io.WriteString(w, jwks)

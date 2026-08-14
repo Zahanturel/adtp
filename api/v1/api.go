@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 package v1
 
 import "net/http"
@@ -17,7 +19,7 @@ func NewRouter(svc *Service) http.Handler {
 	mux.HandleFunc("GET /health", handleHealth(svc))
 	mux.HandleFunc("POST /v1/admin/reconcile", handleReconcile(svc))
 
-	var h http.Handler = svc.authGate()(mux)
+	h := svc.authGate()(mux)
 	if rps := svc.Config.Server.RateLimitRPS; rps > 0 {
 		burst := svc.Config.Server.RateLimitBurst
 		if burst <= 0 {

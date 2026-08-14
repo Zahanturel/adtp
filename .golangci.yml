@@ -1,11 +1,29 @@
-linters-settings:
-  errcheck:
-    check-blank: false
-  staticcheck:
-    checks: ["all"]
+# golangci-lint v2 configuration.
+#
+# v2 folded the former `stylecheck` and `quickfix` linters into `staticcheck`, so
+# `checks: ["all"]` enables the ST* and QF* families that v1 did not run. Two of
+# those are excluded below with reasons; everything else is enforced.
+version: "2"
 
-issues:
-  exclude-rules:
-    - path: _test\.go
-      linters:
-        - errcheck
+linters:
+  settings:
+    errcheck:
+      check-blank: false
+    staticcheck:
+      checks:
+        - "all"
+        # ST1003 would rename the audit entry's Ts field to TS. The struct is
+        # serialized to JSON and persisted, and the initialism rule buys nothing
+        # here, so the churn across the audit and store packages is not worth it.
+        - "-ST1003"
+        # QF1001 suggests De Morgan's law on the IPv6 hex-range check in
+        # capability.go. The explicit "not in any of these ranges" form reads
+        # closer to the URI grammar it implements than the inverted form would.
+        - "-QF1001"
+  exclusions:
+    rules:
+      # Tests routinely ignore errors from helpers whose failure the assertion
+      # itself would catch.
+      - path: _test\.go
+        linters:
+          - errcheck
