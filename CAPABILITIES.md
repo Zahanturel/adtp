@@ -39,6 +39,26 @@ URICovers("tool://x/*",   "tool://y/a")     = false   authority must be equal
 A bare `*` is **not** a valid `with` value — it fails canonicalization
 (`expected scheme://authority form`). There is no "any resource" wildcard.
 
+### `*` means different things in the two positions
+
+`URICovers(pattern, resource)` is asymmetric, and the asymmetry is not visible in the
+function's signature — it takes two URIs and its first test is string equality.
+
+- **Pattern position** (a capability's `with`): a `*` path segment is a wildcard, as above.
+  This is the grant.
+- **Resource position** (a verification request's `resource`): there is no wildcard
+  semantics. The resource names the single concrete thing being acted on.
+
+Nothing in the URI profile enforces that distinction. `*` is a legal sub-delim, so
+`tool://x/*` is a perfectly canonical URI and `URICovers("tool://x/*", "tool://x/*")`
+returns **true** via the equality fast path — authorizing the pattern itself rather than any
+resource it covers. A caller who passes a glob where a resource belongs would get an ALLOW
+for something that was never resolved to a real target.
+
+`/v1/verify` therefore rejects any request whose `resource` contains a `*` or `**` segment,
+with 400 `AGENT_ERR_V017_MALFORMED`, and verification step 8 rejects it again for callers
+that use the library directly.
+
 At **verification step 8** (Authorization) the requested resource must be covered by the
 matched capability's `with`. Any URI that fails canonicalization causes coverage to return
 false, so malformed input fails closed.

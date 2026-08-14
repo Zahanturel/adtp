@@ -271,15 +271,40 @@ func TestStep2Linkage(t *testing.T) {
 	}
 }
 
+func oneCaveat() credential.Constraints {
+	return credential.Constraints{credential.NewTimeWindow(0, 100)}
+}
+
+// tokenWithAtt builds an unsigned UCAN carrying att, for structural checks that
+// run before any signature work.
+func tokenWithAtt(caps ...credential.Capability) *credential.UCAN {
+	return &credential.UCAN{Payload: credential.UCANPayload{Exp: 100, Att: caps}}
+}
+
 func TestStep0Structural(t *testing.T) {
 	tests := []struct {
 		name    string
 		element delegation.ChainElement
 		wantErr bool
 	}{
-		{"valid block", delegation.ChainElement{Block: &credential.RestrictBlock{Exp: 100}, Mode: delegation.ModeRestrict}, false},
-		{"missing expiry", delegation.ChainElement{Block: &credential.RestrictBlock{}, Mode: delegation.ModeRestrict}, true},
-		{"unrecognized crit", delegation.ChainElement{Block: &credential.RestrictBlock{Exp: 100, Crit: []string{"x"}}, Mode: delegation.ModeRestrict}, true},
+		{"valid block", delegation.ChainElement{Block: &credential.RestrictBlock{Exp: 100, Cav: oneCaveat()}, Mode: delegation.ModeRestrict}, false},
+		{"missing expiry", delegation.ChainElement{Block: &credential.RestrictBlock{Cav: oneCaveat()}, Mode: delegation.ModeRestrict}, true},
+		{"unrecognized crit", delegation.ChainElement{Block: &credential.RestrictBlock{Exp: 100, Cav: oneCaveat(), Crit: []string{"x"}}, Mode: delegation.ModeRestrict}, true},
+		// Section 8.2 requires at least one caveat. Enforced at issuance and in
+		// ValidateAgainstParent, which the verifier does not call — so a forged
+		// zero-caveat block is a hop that restricts nothing.
+		{"zero caveats", delegation.ChainElement{Block: &credential.RestrictBlock{Exp: 100}, Mode: delegation.ModeRestrict}, true},
+		// The ability set is closed per ucv; Capability.Validate enforces that at
+		// issuance only.
+		{"unknown ability", delegation.ChainElement{Token: tokenWithAtt(credential.Capability{
+			Can: "admin/everything", With: "tool://server/x",
+		}), Mode: delegation.ModeRoot}, true},
+		{"non-canonical with", delegation.ChainElement{Token: tokenWithAtt(credential.Capability{
+			Can: credential.CanToolInvoke, With: "TOOL://Server/X",
+		}), Mode: delegation.ModeRoot}, true},
+		{"valid token", delegation.ChainElement{Token: tokenWithAtt(credential.Capability{
+			Can: credential.CanToolInvoke, With: "tool://server/x",
+		}), Mode: delegation.ModeRoot}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

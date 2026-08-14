@@ -13,8 +13,8 @@ Nothing here is softened. Several findings remain open.
 
 | | Count |
 |---|---|
-| Findings resolved | 5 |
-| Findings open | 8 |
+| Findings resolved | 7 |
+| Findings open | 9 |
 | Findings withdrawn as incorrect | 2 |
 | Claims verified | 4 (1 confirmed, 2 partial, 1 **withdrawn — this audit got it wrong**) |
 | Public claims cut or qualified | 14 |
@@ -109,7 +109,8 @@ rather than observations:
 
 - Every `Create*` validation in `internal/credential` is being re-checked against its
   corresponding `Parse*` and against the verification steps, looking for anything else the
-  issuance path refuses that the admission path accepts. Results will be recorded here.
+  issuance path refuses that the admission path accepts. **That sweep has since been run;
+  it found two more and is recorded as F16.**
 - No future entry in this document may cite issuance-time validation as evidence about
   verification-time behaviour without naming the verification-side line that enforces it.
 
@@ -178,6 +179,70 @@ by re-encoding it once inline chain presentation ships. Not reachable today, bec
 block the daemon resolves comes from its own store under a CID it verified.
 *Resolved:* `ParseRestrictBlock` now compares the received bytes to the canonical
 re-serialization and rejects on any difference.
+
+**F18 — Control-plane and primitive defects.** Seven, found by the same external audit,
+grouped because they were fixed together:
+
+- **JWKS URL was not required to be HTTPS.** Config validation checked non-empty only and
+  `oidc.go` did a plain `client.Get`. Over `http://` a network attacker substitutes their own
+  signing key and mints bearer tokens the daemon accepts — a complete control-plane
+  authentication bypass. *Resolved:* rejected at config load, so the daemon refuses to start
+  rather than failing open at first request.
+- **`rsaPublicKeyFromJWK` accepted any modulus size,** including 1024-bit.
+  *Resolved:* 2048-bit minimum.
+- **`httpJWKS.keys()` held the cache mutex across the network fetch.** One slow IdP stalled
+  every authenticated request, including those whose cache entry was already fresh; and
+  because a failed fetch leaves the cache stale, each queued caller then issued its own
+  request and waited its own full timeout — N callers, N sequential timeouts. *Resolved:* the
+  lock is no longer held across the fetch and concurrent refreshes are coalesced into one
+  upstream request. Both properties are asserted by tests that fail against the old code.
+- **JCS delegated string decoding to `encoding/json`,** which substitutes U+FFFD for lone
+  surrogates and invalid UTF-8 instead of failing. `"\ud800"`, `"\udfff"`, and a genuine
+  U+FFFD therefore canonicalized identically — one signature and one CID for three distinct
+  documents, which is the parser-differential class SD-3 exists to close. RFC 8785 and I-JSON
+  both require rejection. *Resolved:* a pre-decode pass validates UTF-8 and surrogate
+  pairing.
+- **`handleVerify` accepted `chain` as an array and used only element zero,** silently
+  discarding the rest. *Resolved:* arrays longer than one element are rejected; ancestors are
+  resolved from the proof store by walking `prf`, which is what actually happens.
+- **A wildcard was accepted in the resource position of a verification request.** `*` is a
+  legal sub-delim, so `tool://x/*` canonicalizes, and `URICovers` returns true via its
+  `p == c` fast path — authorizing a glob that was never resolved to a target. *Resolved:*
+  rejected at `/v1/verify` and again at step 8; the asymmetry between pattern position and
+  resource position is documented in `CAPABILITIES.md`.
+- **Proof of possession was self-satisfied.** With no client invocation the daemon minted one
+  with the leaf agent's own custodial key and verified its own signature, making step 10
+  vacuous on that path. *Resolved:* gated behind `verify.allow_custodial_invocation`,
+  defaulting to **off**, and documented in the README. Gating was chosen over documenting
+  because a verification step that silently proves nothing is worse than one that is absent —
+  the default now matches what the pipeline claims to do.
+
+**F16 — Issuance/admission sweep: two more invariants enforced only at issuance.** Prompted
+by F14, every `Create*` validation in `internal/credential` was read against its `Parse*`
+counterpart and against the thirteen steps. Two more were enforced nowhere on the admission
+path:
+
+- `Capability.Validate` — the ability set is closed per `ucv` and `with` must be canonical.
+  `ParseUCAN` never called it and no step re-checked it, so a token carrying an unknown
+  ability reached step 8, where it is matched by string equality against a request action
+  that was itself unvalidated.
+- `ErrNoCaveats` — Section 8.2 requires a RESTRICT block to carry at least one caveat.
+  `CreateRestrictBlock` and `ValidateAgainstParent` both enforce it, but the verifier
+  reimplements linkage in `step2Linkage` and never calls `ValidateAgainstParent`, so a
+  forged zero-caveat block was a delegation hop that restricted nothing.
+
+*Resolved:* both are enforced in `step0Structural`, with a comment recording why the
+duplication exists. Neither was independently exploitable at the time — `att` reaches the
+verifier only from a trusted root or a RESTATE hop, and a vacuous caveat achieves what a
+zero-caveat block did — but both are the F14 pattern exactly.
+
+Three further asymmetries were found and judged benign, each because the verification path
+makes the invalid state unsatisfiable rather than because it validates: a negative `nbf`/`iat`
+is simply a window in the past (step 5); `exp <= nbf` admits no `now` (step 5); and a
+non-canonical `with` or `resource_restrict` resource makes `URICovers` return false, since it
+canonicalizes internally and fails closed. Recorded rather than fixed, because "unsatisfiable
+in practice" is a weaker guarantee than "rejected" and the reasoning should be re-checked if
+those steps change.
 
 **F1 — Agent keys were memory-only on every backend.** *(was: highest severity)*
 The daemon wired `identity.NewMemoryKeyStore()` unconditionally, and it was the only
@@ -264,6 +329,14 @@ default bind. *Open, by design.*
 deleted from the `sync.Map`
 ([`internal/verify/pop.go:86`](internal/verify/pop.go#L86)), so memory grows with total
 invocations over process lifetime. *Open.*
+
+**F17 — The control plane has authentication but no authorization.** Any valid API key can
+revoke as the platform authority ([`api/v1/handlers.go`](api/v1/handlers.go)), verify as any
+agent whose custodial key the daemon holds, and enumerate the whole credential store. There
+are no scopes, roles, or per-key restrictions: one key is total control. F4 and F5 are
+symptoms of this, not separate problems. *Open; documented in the README under Status and
+tracked for v0.3. Not softened: this is the single largest gap between what the daemon
+authenticates and what it authorizes.*
 
 **F9 — Revocation authority is authenticated but not authorized.**
 `VerifyEntrySelfSignature` ([`internal/revocation/entry.go:113`](internal/revocation/entry.go#L113))

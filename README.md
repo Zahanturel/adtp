@@ -328,8 +328,7 @@ without a migration path.
 delegation; the 13-step verification pipeline; signed revocation entries and lists, with
 `COMPROMISED` cascade and registration-index reconciliation; a hash-linked audit log; OIDC
 bearer auth (RS256 against a JWKS URL); batched audit export to an HTTP webhook; in-memory
-and PostgreSQL backends. 258 tests and 5 fuzz targets; RESTRICT is exercised by 7
-adversarial escalation tests in
+and PostgreSQL backends. RESTRICT is exercised by eight adversarial escalation vectors in
 [`internal/verify/adversarial_test.go`](internal/verify/adversarial_test.go).
 
 **Not implemented,** though named in the protocol design: transparency-log-backed
@@ -349,6 +348,18 @@ about this at startup. HSM-backed custody is not implemented.
 **Cross-organizational trust** exists as a type (`TrustPolicy`: a platform DID list and a
 depth bound) but nothing populates it from configuration, so it is unreachable through the
 daemon.
+
+**The control plane authenticates callers but does not authorize them: any valid API key can
+revoke as the platform authority, verify as any agent whose key the daemon holds, and walk
+the entire credential store.** There are no scopes, roles, or per-key restrictions of any
+kind — one key is total control. Scoped API keys are tracked for v0.3.
+
+**Proof of possession requires a client-signed invocation.** When `/v1/verify` is called
+without one, the daemon can mint and sign an invocation using the leaf agent's custodial key
+and then verify its own signature — which proves nothing about the caller and makes
+verification step 10 vacuous. That path is disabled by default; set
+`verify.allow_custodial_invocation: true` to enable it, and only where the caller is already
+trusted to act for every agent in the key store.
 
 **Windows:** the Makefile needs a POSIX shell. Use `go build -o adtpd.exe ./cmd/adtpd` and
 `go test ./...` directly.

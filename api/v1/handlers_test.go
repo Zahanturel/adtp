@@ -118,12 +118,19 @@ func newTestServer(t *testing.T) *httptest.Server {
 	if err != nil {
 		t.Fatalf("platform key: %v", err)
 	}
+	cfg := config.Default()
+	// These tests drive /v1/verify without supplying an invocation, which is the
+	// custodial path. It is off by default because the daemon then verifies a
+	// signature it produced itself; opting in explicitly here keeps that visible
+	// rather than inherited. TestVerifyRequiresInvocationByDefault covers the
+	// default.
+	cfg.Verify.AllowCustodialInvocation = true
 	svc := &Service{
 		Store:       memory.New(),
 		Keys:        identity.NewMemoryKeyStore(),
 		PlatformKey: key,
 		PlatformDID: did,
-		Config:      config.Default(),
+		Config:      cfg,
 		NonceCache:  verify.NewMemoryNonceCache(),
 		Logger:      slog.New(slog.NewTextHandler(io.Discard, nil)),
 		APIKeys:     map[string]bool{testAPIKey: true},
@@ -687,4 +694,73 @@ func mustCap(t *testing.T, can, with string, cs ...credential.Constraint) creden
 		t.Fatalf("NewCapability: %v", err)
 	}
 	return c
+}
+
+// newTestServerNoCustodial mirrors newTestServer but leaves the custodial
+// invocation flag at its default (off).
+func newTestServerNoCustodial(t *testing.T) *httptest.Server {
+	t.Helper()
+	did, key, err := identity.GenerateDID()
+	if err != nil {
+		t.Fatalf("platform key: %v", err)
+	}
+	svc := &Service{
+		Store:       memory.New(),
+		Keys:        identity.NewMemoryKeyStore(),
+		PlatformKey: key,
+		PlatformDID: did,
+		Config:      config.Default(),
+		NonceCache:  verify.NewMemoryNonceCache(),
+		Logger:      slog.New(slog.NewTextHandler(io.Discard, nil)),
+		APIKeys:     map[string]bool{testAPIKey: true},
+	}
+	srv := httptest.NewServer(NewRouter(svc))
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+// With no invocation supplied the daemon used to mint one with the leaf agent's
+// custodial key and then verify its own signature, making step 10 vacuous. That
+// path is now opt-in.
+func TestVerifyRequiresInvocationByDefault(t *testing.T) {
+	if config.Default().Verify.AllowCustodialInvocation {
+		t.Fatal("FATAL: custodial invocation is enabled by default")
+	}
+	srv := newTestServerNoCustodial(t)
+	var resp adtp.VerifyResponse
+	code := post(t, srv.URL+"/v1/verify", adtp.VerifyRequest{
+		ChainCIDs: []string{"bafkreiabsentcid"}, Action: credential.CanToolInvoke, Resource: "tool://server/search",
+	}, &resp)
+	if code != http.StatusBadRequest {
+		t.Errorf("code = %d, want 400", code)
+	}
+	if !strings.Contains(resp.Error, "invocation") {
+		t.Errorf("error = %q, want it to name the missing invocation", resp.Error)
+	}
+}
+
+func TestVerifyRejectsMultiElementChain(t *testing.T) {
+	srv := newTestServer(t)
+	// Only element zero was ever read; the rest was silently discarded.
+	code := post(t, srv.URL+"/v1/verify", adtp.VerifyRequest{
+		ChainCIDs: []string{"bafkreileaf", "bafkreiparent"},
+		Action:    credential.CanToolInvoke, Resource: "tool://server/search",
+	}, nil)
+	if code != http.StatusBadRequest {
+		t.Errorf("code = %d, want 400 for a two-element chain", code)
+	}
+}
+
+// "*" is a legal sub-delim, so a wildcard resource canonicalizes and is matched
+// by URICovers' equality fast path — authorizing a glob that was never resolved.
+func TestVerifyRejectsWildcardResource(t *testing.T) {
+	srv := newTestServer(t)
+	for _, res := range []string{"tool://server/*", "tool://server/*/x", "tool://server/**"} {
+		code := post(t, srv.URL+"/v1/verify", adtp.VerifyRequest{
+			ChainCIDs: []string{"bafkreileaf"}, Action: credential.CanToolInvoke, Resource: res,
+		}, nil)
+		if code != http.StatusBadRequest {
+			t.Errorf("resource %q: code = %d, want 400", res, code)
+		}
+	}
 }

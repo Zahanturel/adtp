@@ -37,6 +37,7 @@ import (
 	"io"
 	"sort"
 	"unicode/utf16"
+	"unicode/utf8"
 )
 
 // Canonicalization errors. They are joined into returned errors with %w so that
@@ -51,6 +52,12 @@ var (
 	ErrTrailingData = errors.New("trailing data after JSON value")
 	// ErrInvalidJSON reports input that is not well-formed JSON.
 	ErrInvalidJSON = errors.New("invalid JSON")
+	// ErrInvalidUTF8 reports a document that is not valid UTF-8, which I-JSON
+	// and RFC 8785 both require.
+	ErrInvalidUTF8 = errors.New("input is not valid UTF-8")
+	// ErrLoneSurrogate reports a \u escape naming an unpaired surrogate code
+	// point, which is not a Unicode scalar value and has no UTF-8 encoding.
+	ErrLoneSurrogate = errors.New("unpaired surrogate escape")
 )
 
 // Canonicalize returns the RFC 8785 canonical serialization of data under the
@@ -58,6 +65,13 @@ var (
 // integer, boolean, or null). The input is fully parsed — duplicate keys and
 // non-integer numbers are rejected — before any output is produced.
 func Canonicalize(data []byte) ([]byte, error) {
+	// Must run before decoding: encoding/json silently substitutes U+FFFD for
+	// invalid UTF-8 and for unpaired surrogate escapes, so by the time a string
+	// token is produced the evidence is gone.
+	if err := validateTextEncoding(data); err != nil {
+		return nil, err
+	}
+
 	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.UseNumber()
 
@@ -94,6 +108,83 @@ func CanonicalizeValue(v any) ([]byte, error) {
 func ValidateIJSON(data []byte) error {
 	_, err := Canonicalize(data)
 	return err
+}
+
+// validateTextEncoding enforces the text-level requirements RFC 8785 and I-JSON
+// place on the input, which encoding/json does not: the document must be valid
+// UTF-8, and every \u escape inside a string must be a scalar value or a
+// correctly ordered surrogate pair.
+//
+// This cannot be folded into the decode pass. encoding/json replaces invalid
+// UTF-8 bytes and unpaired surrogate escapes with U+FFFD rather than failing, so
+// "\ud800", "\udfff", and a literal U+FFFD all arrive at canonicalizeToken as
+// the same string. Three distinct documents would then canonicalize to identical
+// bytes and therefore to one signature and one CID — a canonicalization
+// collision, which is precisely the parser-differential class SD-3 exists to
+// close.
+func validateTextEncoding(data []byte) error {
+	if !utf8.Valid(data) {
+		return fmt.Errorf("adtp/signing: jcs: %w", ErrInvalidUTF8)
+	}
+	inString := false
+	for i := 0; i < len(data); i++ {
+		if !inString {
+			if data[i] == '"' {
+				inString = true
+			}
+			continue
+		}
+		switch data[i] {
+		case '"':
+			inString = false
+		case '\\':
+			if i+1 >= len(data) {
+				return fmt.Errorf("adtp/signing: jcs: %w: truncated escape", ErrInvalidJSON)
+			}
+			if data[i+1] != 'u' {
+				i++ // a simple two-character escape
+				continue
+			}
+			hi, ok := hex4(data, i+2)
+			if !ok {
+				return fmt.Errorf("adtp/signing: jcs: %w: malformed \\u escape", ErrInvalidJSON)
+			}
+			i += 5
+			if !utf16.IsSurrogate(rune(hi)) {
+				continue
+			}
+			// A surrogate is only legal as the high half of a pair immediately
+			// followed by the low half.
+			lo, ok := hex4(data, i+3)
+			if hi > 0xDBFF || !ok || data[i+1] != '\\' || data[i+2] != 'u' ||
+				utf16.DecodeRune(rune(hi), rune(lo)) == utf8.RuneError {
+				return fmt.Errorf("adtp/signing: jcs: %w: \\u%04X", ErrLoneSurrogate, hi)
+			}
+			i += 6
+		}
+	}
+	return nil
+}
+
+// hex4 decodes the four hexadecimal digits at data[i:i+4].
+func hex4(data []byte, i int) (uint32, bool) {
+	if i+4 > len(data) {
+		return 0, false
+	}
+	var v uint32
+	for _, b := range data[i : i+4] {
+		switch {
+		case b >= '0' && b <= '9':
+			v = v<<4 | uint32(b-'0')
+		case b >= 'a' && b <= 'f':
+			v = v<<4 | uint32(b-'a'+10)
+		case b >= 'A' && b <= 'F':
+			v = v<<4 | uint32(b-'A'+10)
+		default:
+			return 0, false
+		}
+	}
+	return v, true
 }
 
 // canonicalizeValue reads exactly one JSON value from dec and writes its

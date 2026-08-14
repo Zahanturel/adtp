@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
+	"strings"
 
 	"github.com/Zahanturel/adtp/internal/audit"
 	"github.com/Zahanturel/adtp/internal/credential"
@@ -110,8 +111,15 @@ func elemDelegableDepth(e delegation.ChainElement) (int, bool) {
 // ---- the thirteen steps ----
 
 // step0Structural validates each element's structural invariants: an expiry is
-// present, and size limits hold. The typ/alg/ucv tags and the I-JSON profile are
-// already enforced when elements are parsed during chain building.
+// present, size limits hold, capabilities are well-formed, and a RESTRICT block
+// actually restricts. The typ/alg/ucv tags and the I-JSON profile are already
+// enforced when elements are parsed during chain building.
+//
+// Every check here has a counterpart in the issuance path (CreateUCAN's
+// validateForIssuance, CreateRestrictBlock). That duplication is the point:
+// issuance-time validation constrains only what this implementation mints, and
+// says nothing about what an attacker holding a signing key can present. An
+// invariant enforced only at issuance is not enforced.
 func step0Structural(chain *delegation.Chain) error {
 	for i, e := range chain.Elements {
 		if elemExp(e) <= 0 {
@@ -121,7 +129,23 @@ func step0Structural(chain *delegation.Chain) error {
 			if len(e.Token.Payload.Att) > credential.MaxCapabilities {
 				return verr(0, CodeMalformed, nil, "element %d exceeds capability limit", i)
 			}
+			// The ability set is closed per ucv and 'with' must be canonical.
+			// Capability.Validate enforces both at issuance; without this, a token
+			// carrying an unknown ability reaches step 8, where it is matched by
+			// string equality against a request action that is equally unvalidated.
+			for j := range e.Token.Payload.Att {
+				if err := e.Token.Payload.Att[j].Validate(); err != nil {
+					return verr(0, CodeMalformed, err, "element %d capability %d", i, j)
+				}
+			}
 		} else {
+			// A RESTRICT block MUST carry at least one caveat (Section 8.2). The
+			// issuance path and ValidateAgainstParent both enforce this; the verifier
+			// never calls ValidateAgainstParent, so without this check a forged
+			// zero-caveat block is a delegation hop that restricts nothing.
+			if len(e.Block.Cav) == 0 {
+				return verr(0, CodeMalformed, nil, "element %d is a RESTRICT block with no caveats", i)
+			}
 			if len(e.Block.Cav) > credential.MaxCaveatsPerBlock {
 				return verr(0, CodeMalformed, nil, "element %d exceeds caveat limit", i)
 			}
@@ -335,6 +359,19 @@ func step7Attenuation(chain *delegation.Chain) error {
 // (the nearest token's att) and then evaluates every constraint and caveat on
 // the path against the invocation context.
 func step8Authorization(chain *delegation.Chain, ctx InvocationContext) (*credential.Capability, error) {
+	// A request resource is concrete; "*" is a wildcard only in a capability's
+	// "with". URICovers compares two URIs and tests equality first, so a request
+	// for "tool://x/*" matches a capability for "tool://x/*" and authorizes the
+	// pattern rather than anything it covers. The daemon also rejects this at the
+	// API boundary — the duplication is the point, since an invariant enforced at
+	// one entry point is not enforced for any other caller of this package.
+	for _, seg := range strings.Split(ctx.Resource, "/") {
+		if seg == "*" || seg == "**" {
+			return nil, verr(8, CodeCapInsufficient, nil,
+				"request resource %q contains a wildcard segment", ctx.Resource)
+		}
+	}
+
 	att := effectiveAtt(chain)
 	var matched *credential.Capability
 	for i := range att {

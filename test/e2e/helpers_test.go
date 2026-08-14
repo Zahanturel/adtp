@@ -43,6 +43,11 @@ func startDaemon(t *testing.T) *testDaemon {
 	cfg.Verify.MaxChainDepth = 10
 	cfg.Verify.ClockSkewSeconds = 5
 	cfg.Verify.DefaultRiskTier = "HIGH"
+	// The e2e suite drives /v1/verify without client-signed invocations, so it
+	// needs the custodial path. It is off by default: on that path the daemon
+	// signs the invocation with the leaf agent's own key and then verifies its
+	// own signature, so step 10 proves nothing about the caller.
+	cfg.Verify.AllowCustodialInvocation = true
 
 	svc := &v1.Service{
 		Store:       memory.New(),

@@ -140,6 +140,28 @@ func TestValidateAuth(t *testing.T) {
 			t.Errorf("err = %v, want ErrInvalidAuthMode", err)
 		}
 	})
+	// The JWKS is the trust anchor for every control-plane bearer token. Over
+	// plaintext or a relative URL, a network attacker substitutes their own
+	// signing key and mints tokens the daemon accepts.
+	t.Run("insecure jwks_url rejected", func(t *testing.T) {
+		for _, bad := range []string{
+			"http://idp/jwks",
+			"HTTP://idp/jwks",
+			"//idp/jwks",
+			"/jwks",
+			"idp/jwks",
+			"file:///etc/jwks.json",
+			"https:///jwks",
+		} {
+			c := Default()
+			c.Auth = AuthConfig{Mode: AuthModeOIDC, OIDC: OIDCConfig{
+				Issuer: "https://idp", Audience: "api://adtp", JWKSURL: bad,
+			}}
+			if err := c.validate(); !errors.Is(err, ErrInsecureJWKS) {
+				t.Errorf("jwks_url %q: err = %v, want ErrInsecureJWKS", bad, err)
+			}
+		}
+	})
 }
 
 func TestValidateRiskTier(t *testing.T) {

@@ -13,8 +13,10 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -359,6 +361,22 @@ func handleVerify(svc *Service) http.HandlerFunc {
 			writeErr(w, http.StatusBadRequest, adtp.CodeMalformed, "chain, action, and resource are required")
 			return
 		}
+		// Only the leaf is read; the rest of the chain is resolved from the store by
+		// walking prf links. Accepting a longer array and using element zero would
+		// silently discard caller input that looks like it constrains the request.
+		if len(req.ChainCIDs) > 1 {
+			writeErr(w, http.StatusBadRequest, adtp.CodeMalformed,
+				"chain must contain exactly one element (the leaf CID); ancestors are resolved from the proof store")
+			return
+		}
+		// The resource of a request is a concrete target, never a pattern. "*" is a
+		// legal sub-delim, so "tool://x/*" canonicalizes and would be matched by
+		// URICovers' equality fast path against a capability for "tool://x/*" —
+		// authorizing a glob that was never resolved to anything.
+		if err := rejectWildcardResource(req.Resource); err != nil {
+			writeErr(w, http.StatusBadRequest, adtp.CodeMalformed, err.Error())
+			return
+		}
 		leafCID := req.ChainCIDs[0]
 
 		inv, err := svc.invocationFor(r.Context(), req, leafCID)
@@ -386,8 +404,34 @@ func handleVerify(svc *Service) http.HandlerFunc {
 	}
 }
 
-// invocationFor returns the invocation to verify: the client-supplied one, or a
-// daemon-built one signed with the leaf agent's key (custodial mode).
+// rejectWildcardResource rejects a wildcard in the resource position of a
+// request.
+//
+// The asymmetry is deliberate and worth stating plainly, because "*" means two
+// different things depending on where it appears:
+//
+//   - In a capability's "with" (the pattern position) a "*" path segment is a
+//     wildcard matching exactly one non-empty segment. That is the grant.
+//   - In a request's resource (the concrete position) there is no wildcard
+//     semantics at all. The resource names the single thing being acted on.
+//
+// URICovers does not and cannot distinguish the two: it takes two URIs, and its
+// first test is string equality. A request for "tool://x/*" against a capability
+// for "tool://x/*" therefore matches — the verifier authorizes the pattern
+// itself rather than any resource the pattern covers. Since "*" is a legal
+// sub-delim it survives canonicalization, so nothing downstream catches it.
+func rejectWildcardResource(resource string) error {
+	for _, seg := range strings.Split(resource, "/") {
+		if seg == "*" || seg == "**" {
+			return fmt.Errorf("resource %q contains a wildcard segment; a request resource must be concrete", resource)
+		}
+	}
+	return nil
+}
+
+// invocationFor returns the invocation to verify: the client-supplied one, or —
+// only when custodial invocation is explicitly enabled — a daemon-built one
+// signed with the leaf agent's key.
 func (svc *Service) invocationFor(ctx context.Context, req adtp.VerifyRequest, leafCID string) (*verify.UCANInvocation, error) {
 	if len(req.Invocation) > 0 {
 		var inv verify.UCANInvocation
@@ -395,6 +439,13 @@ func (svc *Service) invocationFor(ctx context.Context, req adtp.VerifyRequest, l
 			return nil, jsonError("invalid invocation")
 		}
 		return &inv, nil
+	}
+	// Self-minting makes step 10 vacuous: the daemon signs an invocation with the
+	// leaf agent's custodial key and then verifies its own signature. Nothing
+	// about the caller is proven. Off unless the operator turns it on.
+	if !svc.Config.Verify.AllowCustodialInvocation {
+		return nil, jsonError("no invocation supplied; proof of possession requires a client-signed invocation " +
+			"(set verify.allow_custodial_invocation to let the daemon sign with its custodial key instead)")
 	}
 	raw, err := svc.Store.Get(ctx, leafCID)
 	if err != nil {

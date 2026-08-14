@@ -299,3 +299,80 @@ func TestCanonicalizeDeepNesting(t *testing.T) {
 		t.Errorf("deep nesting mismatch")
 	}
 }
+
+// TestCanonicalizeRejectsUnpairedSurrogates covers the collision that
+// encoding/json's U+FFFD substitution would otherwise create. RFC 8785 and
+// I-JSON both require valid UTF-8 and Unicode scalar values; the substitution
+// maps several distinct documents onto one canonical form, and therefore onto
+// one signature and one CID.
+func TestCanonicalizeRejectsUnpairedSurrogates(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want error
+	}{
+		{"lone high surrogate", `{"a":"\ud800"}`, ErrLoneSurrogate},
+		{"lone low surrogate", `{"a":"\udc00"}`, ErrLoneSurrogate},
+		{"high surrogate at end of string", `{"a":"x\udbff"}`, ErrLoneSurrogate},
+		{"high followed by non-escape", `{"a":"\ud800z"}`, ErrLoneSurrogate},
+		{"high followed by non-surrogate escape", `{"a":"\ud800A"}`, ErrLoneSurrogate},
+		{"reversed pair", `{"a":"\udc00\ud800"}`, ErrLoneSurrogate},
+		{"surrogate in a key", `{"\ud800":1}`, ErrLoneSurrogate},
+		{"uppercase hex lone surrogate", `{"a":"\uD800"}`, ErrLoneSurrogate},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := Canonicalize([]byte(tt.in)); !errors.Is(err, tt.want) {
+				t.Errorf("Canonicalize(%s) = %v, want %v", tt.in, err, tt.want)
+			}
+		})
+	}
+
+	// A well-formed surrogate pair is legal and must survive.
+	valid := `{"a":"😀"}`
+	if _, err := Canonicalize([]byte(valid)); err != nil {
+		t.Errorf("Canonicalize(valid pair) = %v", err)
+	}
+}
+
+// TestCanonicalizeRejectsInvalidUTF8 builds its inputs from explicit byte
+// values: these documents cannot be written as source text.
+func TestCanonicalizeRejectsInvalidUTF8(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+	}{
+		{"bare continuation byte", `{"a":"` + raw(0x80) + `"}`},
+		{"truncated two-byte sequence", `{"a":"` + raw(0xC3) + `"}`},
+		{"0xFF is never valid UTF-8", `{"a":"` + raw(0xFF) + `"}`},
+		{"CESU-8 encoded surrogate", `{"a":"` + raw(0xED, 0xA0, 0x80) + `"}`},
+		{"overlong encoding of '/'", `{"a":"` + raw(0xC0, 0xAF) + `"}`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := Canonicalize([]byte(tt.in)); !errors.Is(err, ErrInvalidUTF8) {
+				t.Errorf("Canonicalize = %v, want ErrInvalidUTF8", err)
+			}
+		})
+	}
+}
+
+// The collision itself: distinct documents must not share a canonical form.
+func TestCanonicalizeNoSurrogateCollision(t *testing.T) {
+	docs := []string{
+		`{"a":"\ud800"}`,
+		`{"a":"\udfff"}`,
+		`{"a":"` + raw(0xEF, 0xBF, 0xBD) + `"}`, // a genuine U+FFFD
+	}
+	seen := map[string]string{}
+	for _, d := range docs {
+		out, err := Canonicalize([]byte(d))
+		if err != nil {
+			continue // rejected, which is the required behaviour
+		}
+		if prev, dup := seen[string(out)]; dup {
+			t.Fatalf("FATAL: %s and %s canonicalize identically to %s", prev, d, out)
+		}
+		seen[string(out)] = d
+	}
+}

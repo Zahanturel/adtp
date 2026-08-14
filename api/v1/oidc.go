@@ -160,17 +160,66 @@ type httpJWKS struct {
 	ttl    time.Duration
 	client *http.Client
 
+	// mu guards the fields below. It is never held across a network call.
 	mu        sync.Mutex
 	cached    map[string]*rsa.PublicKey
 	fetchedAt time.Time
+	inflight  *jwksFetch // non-nil while a refresh is running
 }
 
+// jwksFetch is one in-flight refresh, shared by every caller that arrives while
+// it runs. done is closed once keys and err are final.
+type jwksFetch struct {
+	done chan struct{}
+	keys map[string]*rsa.PublicKey
+	err  error
+}
+
+// keys returns the IdP's signing keys, refreshing the cache when it has expired.
+//
+// Two properties matter here, and the original implementation had neither: the
+// cache lock is not held across the fetch, and concurrent refreshes are
+// coalesced into a single upstream request whose result every waiter shares.
+//
+// Holding the lock across a 10-second fetch meant one unresponsive IdP stalled
+// the entire control plane — every authenticated request queued on the mutex,
+// including those whose cache entry was already fresh — and because a failed
+// fetch leaves the cache stale, each queued caller then issued its own request
+// and waited its own full timeout. N requests against a hanging IdP cost N
+// timeouts, serially. They now cost one.
 func (h *httpJWKS) keys() (map[string]*rsa.PublicKey, error) {
 	h.mu.Lock()
-	defer h.mu.Unlock()
 	if h.cached != nil && time.Since(h.fetchedAt) < h.ttl {
-		return h.cached, nil
+		keys := h.cached
+		h.mu.Unlock()
+		return keys, nil
 	}
+	if f := h.inflight; f != nil {
+		h.mu.Unlock()
+		<-f.done
+		return f.keys, f.err
+	}
+	f := &jwksFetch{done: make(chan struct{})}
+	h.inflight = f
+	h.mu.Unlock()
+
+	keys, err := h.fetch()
+
+	h.mu.Lock()
+	if err == nil {
+		h.cached = keys
+		h.fetchedAt = time.Now()
+	}
+	h.inflight = nil
+	h.mu.Unlock()
+
+	f.keys, f.err = keys, err
+	close(f.done)
+	return keys, err
+}
+
+// fetch performs one JWKS retrieval. It holds no lock.
+func (h *httpJWKS) fetch() (map[string]*rsa.PublicKey, error) {
 	client := h.client
 	if client == nil {
 		client = &http.Client{Timeout: 10 * time.Second}
@@ -183,13 +232,7 @@ func (h *httpJWKS) keys() (map[string]*rsa.PublicKey, error) {
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("jwks fetch: status %d", resp.StatusCode)
 	}
-	keys, err := parseJWKS(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-	h.cached = keys
-	h.fetchedAt = time.Now()
-	return keys, nil
+	return parseJWKS(resp.Body)
 }
 
 // jwksDoc / jwk model the subset of the JWKS schema we consume (RSA keys).
@@ -224,6 +267,12 @@ func parseJWKS(r io.Reader) (map[string]*rsa.PublicKey, error) {
 	return out, nil
 }
 
+// minRSAModulusBits is the smallest RSA modulus accepted from a JWKS. A 1024-bit
+// modulus is factorable by a well-resourced adversary, and accepting one lets an
+// IdP — or anyone who can influence its published key set — downgrade
+// control-plane authentication to a strength the daemon never chose.
+const minRSAModulusBits = 2048
+
 func rsaPublicKeyFromJWK(nB64, eB64 string) (*rsa.PublicKey, error) {
 	nBytes, err := base64.RawURLEncoding.DecodeString(nB64)
 	if err != nil {
@@ -237,7 +286,11 @@ func rsaPublicKeyFromJWK(nB64, eB64 string) (*rsa.PublicKey, error) {
 	if e == 0 {
 		return nil, errors.New("jwk exponent is zero")
 	}
-	return &rsa.PublicKey{N: new(big.Int).SetBytes(nBytes), E: e}, nil
+	n := new(big.Int).SetBytes(nBytes)
+	if bits := n.BitLen(); bits < minRSAModulusBits {
+		return nil, fmt.Errorf("jwk modulus is %d bits, minimum is %d", bits, minRSAModulusBits)
+	}
+	return &rsa.PublicKey{N: n, E: e}, nil
 }
 
 // principalCtxKey carries the OIDC-authenticated subject through the request.

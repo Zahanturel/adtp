@@ -7,6 +7,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -97,6 +98,18 @@ type VerifyConfig struct {
 	// registration index for missed entries. 0 disables periodic reconciliation
 	// (startup reconciliation still runs). Default: 0 (disabled).
 	ReconcileIntervalMinutes int `yaml:"reconcile_interval_minutes"`
+	// AllowCustodialInvocation permits /v1/verify to mint and sign an invocation
+	// with the leaf agent's own custodial key when the caller supplies none.
+	//
+	// On that path the daemon verifies a signature it just produced, so
+	// verification step 10 (proof of possession) proves nothing about the caller:
+	// possession is asserted by the daemon on the agent's behalf, not
+	// demonstrated by whoever made the request. Any API-key holder can then
+	// "verify" as any agent whose key the daemon holds.
+	//
+	// It defaults to false. Enable it only where the daemon is the custodian and
+	// the caller is already trusted to act for every agent in the key store.
+	AllowCustodialInvocation bool `yaml:"allow_custodial_invocation"`
 }
 
 // Config errors.
@@ -106,6 +119,7 @@ var (
 	ErrMissingDSN      = errors.New("postgres backend requires a connection string")
 	ErrInvalidAuthMode = errors.New("invalid auth mode")
 	ErrIncompleteOIDC  = errors.New("oidc auth requires issuer, audience, and jwks_url")
+	ErrInsecureJWKS    = errors.New("jwks_url must be an absolute https:// URL")
 	ErrInvalidRiskTier = errors.New("invalid risk tier (must be HIGH, MEDIUM, LOW, or ANALYTICS)")
 	ErrIncompleteTLS   = errors.New("tls_cert and tls_key must both be set")
 )
@@ -253,8 +267,27 @@ func (c *Config) validate() error {
 		if c.Auth.OIDC.Issuer == "" || c.Auth.OIDC.Audience == "" || c.Auth.OIDC.JWKSURL == "" {
 			return fmt.Errorf("adtp/config: %w", ErrIncompleteOIDC)
 		}
+		if err := requireHTTPS(c.Auth.OIDC.JWKSURL); err != nil {
+			return err
+		}
 	default:
 		return fmt.Errorf("adtp/config: %w: %q", ErrInvalidAuthMode, c.Auth.Mode)
+	}
+	return nil
+}
+
+// requireHTTPS rejects a JWKS URL that is not absolute https. The JWKS is the
+// trust anchor for every control-plane bearer token: over http:// a network
+// attacker substitutes their own signing key and mints tokens the daemon
+// accepts, which is a complete authentication bypass. Rejecting at config load
+// means the daemon refuses to start rather than failing open at first request.
+func requireHTTPS(raw string) error {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return fmt.Errorf("adtp/config: %w: %q: %v", ErrInsecureJWKS, raw, err)
+	}
+	if u.Scheme != "https" || u.Host == "" {
+		return fmt.Errorf("adtp/config: %w: %q", ErrInsecureJWKS, raw)
 	}
 	return nil
 }

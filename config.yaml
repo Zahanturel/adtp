@@ -25,6 +25,12 @@ verify:
   # Periodic registration-index reconciliation. 0 disables (startup reconciliation
   # still runs). Set to 15 for production deployments.
   reconcile_interval_minutes: 0
+  # When /v1/verify is called without an invocation, allow the daemon to mint and
+  # sign one with the leaf agent's custodial key. It then verifies its own
+  # signature, so verification step 10 (proof of possession) proves nothing about
+  # the caller: any API-key holder can verify as any agent whose key is held.
+  # Leave false and have clients sign their own invocations.
+  allow_custodial_invocation: false
 
 auth:
   mode: api_key            # "api_key" (default) or "oidc"

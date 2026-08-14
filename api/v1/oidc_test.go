@@ -17,6 +17,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -141,6 +143,125 @@ func TestOIDCVerifyOverHTTPJWKS(t *testing.T) {
 	sub, err := v.Verify(token)
 	if err != nil || sub != "user@example.com" {
 		t.Errorf("Verify over HTTP JWKS = (%q, %v)", sub, err)
+	}
+}
+
+// A 1024-bit modulus is factorable by a well-resourced adversary. Accepting one
+// lets the IdP's published key set silently downgrade control-plane auth.
+func TestJWKSRejectsUndersizedModulus(t *testing.T) {
+	weak, err := rsa.GenerateKey(rand.Reader, 1024)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+	jwks := fmt.Sprintf(`{"keys":[{"kty":"RSA","kid":"weak","n":%q,"e":%q}]}`,
+		b64url(weak.N.Bytes()), b64url(big.NewInt(int64(weak.E)).Bytes()))
+	if _, err := parseJWKS(strings.NewReader(jwks)); err == nil {
+		t.Fatal("FATAL: 1024-bit RSA key accepted from JWKS")
+	}
+
+	strong, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+	ok := fmt.Sprintf(`{"keys":[{"kty":"RSA","kid":"ok","n":%q,"e":%q}]}`,
+		b64url(strong.N.Bytes()), b64url(big.NewInt(int64(strong.E)).Bytes()))
+	if _, err := parseJWKS(strings.NewReader(ok)); err != nil {
+		t.Errorf("2048-bit RSA key rejected: %v", err)
+	}
+}
+
+// A failing IdP must cost one upstream request per refresh, not one per caller.
+// A failed fetch leaves the cache stale, so under the original implementation
+// each queued caller acquired the mutex in turn and issued its own request,
+// waiting its own full timeout: N callers, N sequential timeouts. The success
+// path hides this — the first fetch populates the cache and the rest hit it —
+// which is exactly why the failure path is the one worth asserting.
+func TestJWKSCoalescesConcurrentFetches(t *testing.T) {
+	var hits int32
+	arrived := make(chan struct{}, 1)
+	release := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		atomic.AddInt32(&hits, 1)
+		select {
+		case arrived <- struct{}{}:
+		default:
+		}
+		<-release // hold the "IdP" open until every caller is waiting
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	h := &httpJWKS{url: srv.URL, ttl: time.Minute}
+
+	const callers = 8
+	var wg sync.WaitGroup
+	// The first caller starts the fetch; wait until the handler has it in hand so
+	// the rest genuinely arrive mid-flight rather than racing the start.
+	wg.Add(1)
+	go func() { defer wg.Done(); _, _ = h.keys() }()
+	<-arrived
+	for i := 1; i < callers; i++ {
+		wg.Add(1)
+		go func() { defer wg.Done(); _, _ = h.keys() }()
+	}
+
+	// Give the late callers time to block, then let the IdP respond.
+	time.Sleep(100 * time.Millisecond)
+	close(release)
+	wg.Wait()
+
+	if got := atomic.LoadInt32(&hits); got != 1 {
+		t.Errorf("FATAL: %d upstream JWKS requests for %d concurrent callers, want 1", got, callers)
+	}
+}
+
+// A read that only needs the cache must not block behind an in-flight refresh.
+func TestJWKSFreshCacheReadableDuringSlowFetch(t *testing.T) {
+	key, _ := rsa.GenerateKey(rand.Reader, 2048)
+	jwks := fmt.Sprintf(`{"keys":[{"kty":"RSA","kid":"k1","n":%q,"e":%q}]}`,
+		b64url(key.N.Bytes()), b64url(big.NewInt(int64(key.E)).Bytes()))
+
+	var hits int32
+	arrived := make(chan struct{}, 1)
+	release := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if atomic.AddInt32(&hits, 1) > 1 {
+			select {
+			case arrived <- struct{}{}:
+			default:
+			}
+			<-release
+		}
+		io.WriteString(w, jwks)
+	}))
+	defer srv.Close()
+	defer close(release)
+
+	h := &httpJWKS{url: srv.URL, ttl: 50 * time.Millisecond}
+	if _, err := h.keys(); err != nil {
+		t.Fatalf("initial fetch: %v", err)
+	}
+
+	// Let the cache expire, then start a refresh that hangs in the handler.
+	time.Sleep(60 * time.Millisecond)
+	go func() { _, _ = h.keys() }()
+	<-arrived
+
+	// The refresh is in flight. Re-freshen the cache and read it: this must not
+	// wait on the hanging fetch. Acquiring mu here is itself the assertion —
+	// under the old implementation the refresh holds it for the fetch's duration.
+	locked := make(chan struct{})
+	go func() {
+		h.mu.Lock()
+		h.fetchedAt = time.Now()
+		h.mu.Unlock()
+		_, _ = h.keys()
+		close(locked)
+	}()
+	select {
+	case <-locked:
+	case <-time.After(2 * time.Second):
+		t.Fatal("FATAL: cache access blocked behind an in-flight JWKS fetch")
 	}
 }
 
