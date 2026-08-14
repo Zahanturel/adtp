@@ -36,6 +36,7 @@ var (
 	ErrNoCaveats           = errors.New("RESTRICT block must carry at least one caveat")
 	ErrTooManyCaveats      = errors.New("RESTRICT block exceeds the caveat limit")
 	ErrDepthNotReduced     = errors.New("delegation depth-left was not strictly reduced")
+	ErrNegativeDepth       = errors.New("delegation depth-left is negative")
 	ErrExpiryEscalation    = errors.New("child exp exceeds parent exp")
 	ErrNotBeforeRegression = errors.New("child nbf precedes parent nbf")
 	ErrIssuerMismatch      = errors.New("block issuer does not equal parent audience")
@@ -94,7 +95,7 @@ func CreateRestrictBlock(parent DelegationParent, audDID string, childDL int, ca
 		return nil, nil, fmt.Errorf("adtp/credential: %w: child dl %d not below parent dl %d", ErrDepthNotReduced, childDL, parent.DL)
 	}
 	if childDL < 0 {
-		return nil, nil, fmt.Errorf("adtp/credential: %w: negative dl", ErrDepthNotReduced)
+		return nil, nil, fmt.Errorf("adtp/credential: %w: %d", ErrNegativeDepth, childDL)
 	}
 	for i, c := range caveats {
 		if c == nil {
@@ -148,6 +149,14 @@ func ParseRestrictBlock(raw []byte) (*RestrictBlock, error) {
 	}
 	if block.Sig == "" {
 		return nil, fmt.Errorf("adtp/credential: %w: sig", ErrMissingField)
+	}
+	// A negative depth-left is not a legal encoding. CreateRestrictBlock refuses
+	// to mint one, but nothing stops a holder of a signing key from crafting the
+	// bytes directly, so the parser must refuse it too: without this, a holder of
+	// dl=0 mints a working child at dl=-1 and keeps delegating downward, bounded
+	// only by the chain-depth cap.
+	if block.DL < 0 {
+		return nil, fmt.Errorf("adtp/credential: %w: %d", ErrNegativeDepth, block.DL)
 	}
 	return &block, nil
 }

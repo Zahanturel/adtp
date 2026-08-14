@@ -13,10 +13,10 @@ Nothing here is softened. Several findings remain open.
 
 | | Count |
 |---|---|
-| Findings resolved | 3 |
+| Findings resolved | 4 |
 | Findings open | 8 |
 | Findings withdrawn as incorrect | 2 |
-| Claims verified | 4 (2 confirmed, 2 partial) |
+| Claims verified | 4 (1 confirmed, 2 partial, 1 **withdrawn — this audit got it wrong**) |
 | Public claims cut or qualified | 14 |
 
 ## The four core claims
@@ -78,21 +78,64 @@ Four qualifications, all still true:
 **Verdict: PARTIAL.** Complete for the verification path. Incomplete for published
 revocation state under non-`COMPROMISED` statuses, and defeasible by configuration.
 
-### 3. RESTRICT mode prevents escalation as the design describes — **CONFIRMED**
+### 3. RESTRICT mode prevents escalation as the design describes — ~~**CONFIRMED**~~ **WITHDRAWN**
 
-Verified against `docs/PROTOCOL.md` §8.2 and §8.4. Every specified invariant is enforced
-twice — at issuance in `CreateRestrictBlock` and again at verification in `step2Linkage` — so
-a forged block that bypasses the issuance path still fails. Mode mixing
-(`RESTATE`-after-`RESTRICT`) is rejected structurally at chain build.
+**This verdict was wrong and is withdrawn.** It was recorded as CONFIRMED on the reasoning
+that *"every specified invariant is enforced twice — at issuance in `CreateRestrictBlock` and
+again at verification in `step2Linkage` — so a forged block that bypasses the issuance path
+still fails."* That premise is false. A later external audit found an invariant enforced at
+issuance and **not** at verification, and it was exploitable.
 
-The implementation is *stricter* than the specification in two places, both in the safe
-direction: any `crit` entry is rejected outright, and unenforceable cumulative caveats fail
-closed rather than passing as structurally satisfied.
+**What the PoC showed.** `CreateRestrictBlock` rejected `childDL < 0`. Neither
+`ParseRestrictBlock` nor `step2Linkage` did. `step2Linkage` bounded depth-left only from
+above (`child.dl < parent.dl`), and `-1 < 0` satisfies that bound. So a holder of a block at
+`dl=0` — an agent explicitly delegated no further delegation authority — signed a child at
+`dl=-1` directly and it verified end to end: chain built, all thirteen steps passed, ALLOW.
+The same move repeats at `-2`, `-3`, and onward, bounded only by `MaxChainDepth`. The
+delegation-depth control was one-directional and therefore not a control at all.
 
-Seven adversarial tests
-([`internal/verify/adversarial_test.go`](internal/verify/adversarial_test.go)) forge blocks
-with a real signing key and assert both the denial and the specific step and error code.
-They pass. They cover RESTRICT only; nothing adversarial targets RESTATE.
+**Why the audit missed it.** The adversarial suite probed `dl` in one direction only —
+`dl_escalation` set `dl` *above* the parent's. Seven tests, none of which asked what happens
+below zero. The double-enforcement claim was checked invariant-by-invariant against the
+issuance path and assumed to mirror on the verification path rather than read there.
+Symmetry was inferred, not verified, and the tests inherited the same blind spot.
+
+**The defect is a class, not an instance.** The specific bug is one missing comparison. The
+reasoning error underneath it is the inference *"validated in `Create*`, therefore enforced in
+`Parse*`/verification"* — and this audit made that inference generally, not once. Every other
+invariant it recorded as double-enforced rests on the same unchecked assumption and is
+therefore suspect until read on both paths. Two consequences follow, and both are commitments
+rather than observations:
+
+- Every `Create*` validation in `internal/credential` is being re-checked against its
+  corresponding `Parse*` and against the verification steps, looking for anything else the
+  issuance path refuses that the admission path accepts. Results will be recorded here.
+- No future entry in this document may cite issuance-time validation as evidence about
+  verification-time behaviour without naming the verification-side line that enforces it.
+
+Two narrower lessons, both applying beyond this finding:
+
+- A bound stated in one direction is not evidence of a bound in the other. `dl` had a
+  documented ceiling and an undocumented floor that existed only in the minting path.
+- "Enforced twice" is a claim about two specific code paths and must be read in both. This
+  audit read one and asserted the pair.
+
+*Both defects are now fixed and the claim is not re-asserted; see F14 and F15 under Resolved.
+The verdict stays withdrawn rather than being re-run and upgraded — the point of leaving it
+here is that the reasoning failed, not just the result.*
+
+The two secondary observations from the original entry were checked again and do still hold.
+Mode mixing (`RESTATE`-after-`RESTRICT`) is rejected structurally at chain build, and the
+implementation is stricter than the specification in two places, both in the safe direction:
+any `crit` entry is rejected outright, and unenforceable cumulative caveats fail closed
+rather than passing as structurally satisfied.
+
+The adversarial suite
+([`internal/verify/adversarial_test.go`](internal/verify/adversarial_test.go)) now carries
+nine cases covering eight distinct vectors — the seven originals plus negative `dl`, which is
+asserted at both layers that were missing it. They forge blocks with a real signing key and
+assert the denial along with the specific step and error code. They cover RESTRICT only;
+nothing adversarial targets RESTATE.
 
 ### 4. Identity is did:key with Ed25519 throughout, no alternate key type, no unsigned path — **CONFIRMED**
 
@@ -111,6 +154,18 @@ RSA exists in the binary for a different purpose.
 ## Findings
 
 ### Resolved
+
+**F14 — Delegation depth was bypassable downward.** *(HIGH; found by external audit, not by
+this one)* `CreateRestrictBlock` rejected `childDL < 0`; `ParseRestrictBlock` and
+`step2Linkage` did not, and `step2Linkage` bounded `dl` only from above. A holder of a block
+at `dl=0` signed a child at `dl=-1` and it verified end to end, then again at `-2` and
+onward, bounded only by `MaxChainDepth`. This is the defect that falsifies claim 3 above.
+*Resolved:* `dl < 0` is now rejected in `ParseRestrictBlock`
+([`internal/credential/restrict.go`](internal/credential/restrict.go)) and in `step2Linkage`
+([`internal/verify/steps.go`](internal/verify/steps.go)). Two tests cover it —
+`dl_negative` through the full verifier and `dl_negative_at_linkage` directly against step 2,
+for chains that reach the verifier without being re-parsed — plus a parser-level test in
+`internal/credential/restrict_test.go`. All three fail against the unfixed code.
 
 **F1 — Agent keys were memory-only on every backend.** *(was: highest severity)*
 The daemon wired `identity.NewMemoryKeyStore()` unconditionally, and it was the only
@@ -244,7 +299,7 @@ Every row was cut or qualified.
 | "Cross-org bilateral trust" | Unreachable from the daemon | Cut |
 | "Identity Provider: Entra, Okta, Auth0 via OIDC" | RS256 against a static JWKS; never tested against a live IdP | Qualified |
 | "Audit/SIEM: Datadog, Splunk, Elastic via webhook" | Generic batched JSON POST, no vendor specifics | Qualified |
-| "7 adversarial escalation vectors" | Accurate, but RESTRICT-only | Qualified |
+| "7 adversarial escalation vectors" | RESTRICT-only, and the seven missed one direction of the `dl` bound (F14) | Qualified; now eight vectors |
 | `go install …@v0.1.0-alpha` | Audited as "no tags exist"; **that audit finding was wrong** — the tag and a published prerelease both exist and the command works | Restored, pointing at `v0.1.0` |
 | Revoke example `"scope":"CREDENTIAL"` | Scope constants are lowercase; returns 403 | Fixed, and the casing pitfall called out |
 

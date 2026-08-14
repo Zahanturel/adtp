@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/Zahanturel/adtp/internal/identity"
+	"github.com/Zahanturel/adtp/internal/signing"
 )
 
 func agentKeyDID(t *testing.T) (ed25519.PrivateKey, string) {
@@ -155,6 +156,38 @@ func TestRestrictBlockValidateAgainstParent(t *testing.T) {
 				t.Errorf("err = %v, want %v", err, tt.wantErr)
 			}
 		})
+	}
+}
+
+// B1: CreateRestrictBlock refuses to mint a negative depth-left, but a holder of
+// the signing key can craft the bytes directly, so the parser must refuse it too.
+func TestParseRestrictBlockRejectsNegativeDepth(t *testing.T) {
+	agentKey, agentDID := agentKeyDID(t)
+	parent := delegableParent(t, agentDID)
+	parent.DL = 0
+
+	if _, _, err := CreateRestrictBlock(parent, "did:key:zB", -1, sampleCaveats(t), agentKey); !errors.Is(err, ErrNegativeDepth) {
+		t.Errorf("CreateRestrictBlock err = %v, want ErrNegativeDepth", err)
+	}
+
+	// Forge the block the issuance path refuses to mint: sign it directly.
+	forged := &RestrictBlock{
+		Typ: RestrictBlockTyp,
+		Iss: agentDID, Aud: "did:key:zB", Prf: parent.CID,
+		Nbf: parent.Nbf, Exp: parent.Exp, DL: -1,
+		Cav: sampleCaveats(t),
+	}
+	sig, err := signing.Sign(forged, agentKey)
+	if err != nil {
+		t.Fatalf("Sign: %v", err)
+	}
+	forged.Sig = signing.EncodeSignature(sig)
+	forgedRaw, err := signing.CanonicalizeValue(forged)
+	if err != nil {
+		t.Fatalf("CanonicalizeValue: %v", err)
+	}
+	if _, err := ParseRestrictBlock(forgedRaw); !errors.Is(err, ErrNegativeDepth) {
+		t.Errorf("ParseRestrictBlock err = %v, want ErrNegativeDepth", err)
 	}
 }
 

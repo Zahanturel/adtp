@@ -132,16 +132,37 @@ chain*, a child cannot escape a parent's caveat by omitting it.
 
 The distinction that matters: in RESTATE, a malicious delegator writes a broader capability
 into a field and the verifier's job is to *notice*. In RESTRICT there is no such field, so
-the verifier has no such job. The attack surface is not reduced; it is absent. What remains
-is forging an Ed25519 signature or finding a SHA-256 collision on `prf` — and if either of
-those is available, the whole system is over anyway.
+the verifier has no such job.
 
-Seven adversarial tests in
+That removes one class of attack. It does not leave nothing behind, and an earlier version of
+this document claimed it did — "the attack surface is not reduced; it is absent," with the
+only residue being a forged Ed25519 signature or a SHA-256 collision on `prf`. That was
+wrong, and the shape of the error is worth keeping on the page.
+
+RESTRICT replaces capability *comparison* with a set of scalar invariants. A comparison can
+be subtly wrong; a scalar invariant can be flatly missing — and a missing invariant does not
+present as an attack surface at all until someone probes for it, because there is no code to
+audit. `dl` had a ceiling and no floor: `child.dl < parent.dl` was enforced at verification,
+`child.dl >= 0` was enforced only in the minting path, and a block at `dl=-1` under a parent
+at `dl=0` verified end to end (F14 in [SECURITY_AUDIT.md](SECURITY_AUDIT.md)). No comparison
+code was involved, nothing was forged, and no collision was needed.
+
+The defensible claim is narrower: RESTRICT makes the verifier's obligations *enumerable* —
+a handful of scalar checks in place of a semantic subset test. Enumerable is a real
+advantage, and it is worth only as much as the enumeration is complete and enforced at every
+point the object is admitted.
+
+Eight adversarial vectors in
 [`internal/verify/adversarial_test.go`](internal/verify/adversarial_test.go) attack RESTRICT
-with a real signing key and arbitrary forged payloads — depth escalation, expiry escalation,
-`nbf` regression, issuer/audience linkage break, caveat removal by a child, revoked-credential
-replay, unknown-constraint smuggling. Each asserts the specific step and error code that
-caught it. None target RESTATE.
+with a real signing key and arbitrary forged payloads — depth escalation, depth *de-escalation*
+below zero, expiry escalation, `nbf` regression, issuer/audience linkage break, caveat removal
+by a child, revoked-credential replay, unknown-constraint smuggling. Each asserts the specific
+step and error code that caught it. None target RESTATE.
+
+The negative-depth vector was added after an external audit exploited it: the original seven
+probed `dl` upward only, and the verifier bounded it only from above, so `dl=-1` under a
+parent at `dl=0` verified end to end. That is recorded as F14 in
+[SECURITY_AUDIT.md](SECURITY_AUDIT.md), along with the withdrawal of the claim it falsified.
 
 **The uncomfortable part.** ADTP ships both. RESTATE exists for compatibility with protocol
 v0.2 — a version with no implementations and no users. So the codebase carries 115 lines of

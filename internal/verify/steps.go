@@ -185,6 +185,13 @@ func step2Linkage(chain *delegation.Chain) error {
 			return verr(2, CodeChainBroken, nil, "hop %d: nbf %d < parent %d", i, elemNbf(child), elemNbf(parent))
 		}
 		if child.Block != nil {
+			// Depth-left is bounded on both sides. The upper bound is the parent's
+			// value; the lower bound is zero, and it is not implied by the upper one:
+			// a holder of dl=0 could otherwise mint a child at dl=-1 and keep going
+			// downward, bounded only by MaxChainDepth.
+			if child.Block.DL < 0 {
+				return verr(2, CodeAttenuation, nil, "hop %d: dl %d is negative", i, child.Block.DL)
+			}
 			if pdl, ok := elemDelegableDepth(parent); ok && child.Block.DL >= pdl {
 				return verr(2, CodeAttenuation, nil, "hop %d: dl %d not below parent %d", i, child.Block.DL, pdl)
 			}

@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"encoding/json"
+	"errors"
 	"testing"
 	"time"
 
@@ -118,6 +119,59 @@ func TestAdversarialRestrictBypass(t *testing.T) {
 		}
 		if res.Error.Step != 2 {
 			t.Errorf("step = %d, want 2 (linkage)", res.Error.Step)
+		}
+	})
+
+	// The mirror image of dl_escalation. The upper bound (dl below the parent's)
+	// is satisfied by dl = -1, so only an explicit lower bound rejects it. Left
+	// unchecked, a holder of dl=0 mints a working child at dl=-1 and keeps
+	// delegating downward, bounded only by MaxChainDepth.
+	t.Run("dl_negative", func(t *testing.T) {
+		a := newAdvRoot(t)
+		leafCID := forgeBlock(t, &credential.RestrictBlock{
+			Typ: credential.RestrictBlockTyp,
+			Iss: a.agentDID, Aud: a.leafDID, Prf: a.rootCID,
+			Exp: a.now + 3600, Nbf: a.now - 60,
+			DL:  -1, // below the parent's 5, but not a legal depth
+			Cav: credential.Constraints{credential.NewTimeWindow(a.now-60, a.now+3600)},
+		}, a.agentKey, a.store)
+
+		res := Verify(context.Background(), nil, a.invoke(t, leafCID), a.config)
+		if res.OK {
+			t.Fatal("FATAL: negative dl was not rejected")
+		}
+		// The parser rejects it first, at chain build; step2Linkage carries the
+		// same bound for chains that reach the verifier without being re-parsed.
+		if res.Error.Code != CodeChainBroken {
+			t.Errorf("code = %s, want %s", res.Error.Code, CodeChainBroken)
+		}
+		if res.Error.Step != 1 {
+			t.Errorf("step = %d, want 1 (chain build)", res.Error.Step)
+		}
+	})
+
+	// The verifier-side half of the same bound, exercised directly: a chain whose
+	// block reached step 2 without passing through ParseRestrictBlock.
+	t.Run("dl_negative_at_linkage", func(t *testing.T) {
+		a := newAdvRoot(t)
+		root, err := credential.ParseUCAN(string(mustGet(t, a.store, a.rootCID)))
+		if err != nil {
+			t.Fatalf("ParseUCAN: %v", err)
+		}
+		chain := &delegation.Chain{Elements: []delegation.ChainElement{
+			{Block: &credential.RestrictBlock{
+				Iss: a.agentDID, Aud: a.leafDID, Prf: a.rootCID,
+				Exp: a.now + 3600, Nbf: a.now - 60, DL: -1,
+			}, Mode: delegation.ModeRestrict},
+			{Token: root, CID: a.rootCID, IsRoot: true, Mode: delegation.ModeRoot},
+		}}
+		err = step2Linkage(chain)
+		if err == nil {
+			t.Fatal("FATAL: step2Linkage accepted a negative dl")
+		}
+		var ve *VerificationError
+		if !errors.As(err, &ve) || ve.Code != CodeAttenuation || ve.Step != 2 {
+			t.Errorf("err = %v, want step 2 %s", err, CodeAttenuation)
 		}
 	})
 
