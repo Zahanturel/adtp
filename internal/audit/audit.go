@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 // Package audit implements the hash-linked audit log (specification Section 14):
 // an append-only sequence of entries chained by SHA-256 so that any truncation
 // or modification of history is detectable.

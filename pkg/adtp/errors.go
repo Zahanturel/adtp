@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 package adtp
 
 import "github.com/Zahanturel/adtp/internal/verify"

@@ -1,5 +1,7 @@
 //go:build e2e
 
+// SPDX-License-Identifier: Apache-2.0
+
 package e2e
 
 import (

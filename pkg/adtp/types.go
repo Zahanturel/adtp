@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 // Package adtp defines the public HTTP API contract for the ADTP daemon: the
 // request and response types and the external error codes. These types are the
 // stable, documented external surface that SDKs serialize against.

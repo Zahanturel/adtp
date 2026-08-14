@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 // Package revocation implements the ADTP revocation protocol (specification
 // Section 13): the authority model, signed entries and lists, the cache the
 // verifier consults, the explicit COMPROMISED cascade, and reconciliation.

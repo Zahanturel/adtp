@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 // Package store defines the unified storage interface the daemon depends on.
 // Both the in-memory and PostgreSQL backends implement it.
 package store

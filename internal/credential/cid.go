@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 // Package credential implements ADTP credentials: content identifiers (CIDs),
 // UCAN JWT creation and parsing, and capability/constraint definitions.
 package credential

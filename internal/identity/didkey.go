@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 // Package identity implements ADTP agent identity: did:key generation,
 // parsing, and resolution over Ed25519 keys, plus key storage.
 //

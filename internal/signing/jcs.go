@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 // Package signing implements ADTP's canonical signing discipline (specification
 // Section 3, rules SD-1 through SD-7) together with the RFC 8785 JSON
 // Canonicalization Scheme (JCS) that the discipline is built upon.

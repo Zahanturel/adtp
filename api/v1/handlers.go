@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 // Package v1 implements the ADTP HTTP API (version 1) over the standard
 // library net/http. The daemon is a managed (custodial) identity service: it
 // generates and holds agent keys, issues and delegates credentials, verifies
@@ -57,9 +59,9 @@ type Service struct {
 	listSeq atomic.Int64
 }
 
-func (s *Service) log() *slog.Logger {
-	if s.Logger != nil {
-		return s.Logger
+func (svc *Service) log() *slog.Logger {
+	if svc.Logger != nil {
+		return svc.Logger
 	}
 	return slog.Default()
 }
@@ -91,10 +93,10 @@ func (t siemAuditLog) VerifyChain() error { return t.primary.VerifyChain() }
 
 // auditLog returns the audit log to write through: the store's durable log,
 // teed to the SIEM exporter when one is configured.
-func (s *Service) auditLog() audit.AuditLog {
-	base := s.Store.Audit()
-	if s.SIEM != nil {
-		return siemAuditLog{primary: base, exporter: s.SIEM}
+func (svc *Service) auditLog() audit.AuditLog {
+	base := svc.Store.Audit()
+	if svc.SIEM != nil {
+		return siemAuditLog{primary: base, exporter: svc.SIEM}
 	}
 	return base
 }
@@ -120,7 +122,9 @@ const maxBodyBytes = 64 * 1024
 // the handler can simply `return`.
 func readJSON(w http.ResponseWriter, r *http.Request, v any) bool {
 	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
-	defer r.Body.Close()
+	// net/http closes the request body itself; this is belt-and-braces and its
+	// error is not actionable.
+	defer func() { _ = r.Body.Close() }()
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(v); err != nil {

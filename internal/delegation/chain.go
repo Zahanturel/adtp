@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 // Package delegation builds and issues ADTP delegation chains: walking prf
 // links from a leaf to its root, and minting RESTRICT blocks and RESTATE hops.
 package delegation

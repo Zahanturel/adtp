@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 // Package config loads daemon configuration from a YAML file with environment
 // variable overrides.
 package config

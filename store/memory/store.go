@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 // Package memory provides a unified in-memory storage backend that satisfies
 // the agent, credential, proof, registration, and revocation interfaces used
 // across the daemon. It is the default for single-node deployments and the

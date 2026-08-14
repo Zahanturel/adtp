@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 // Package lifecycle implements the agent lifecycle state machine (specification
 // Section 17): the six states an agent moves through and the legal transitions
 // between them.
