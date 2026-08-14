@@ -159,6 +159,53 @@ func TestRestrictBlockValidateAgainstParent(t *testing.T) {
 	}
 }
 
+// SD-6: any divergence between the received bytes and the canonical
+// re-serialization of the object they decode to must be rejected. Without it one
+// credential admits unboundedly many CIDs, so credential-scoped revocation of a
+// leaf is evaded by re-encoding the block.
+func TestParseRestrictBlockRejectsNonCanonical(t *testing.T) {
+	agentKey, agentDID := agentKeyDID(t)
+	parent := delegableParent(t, agentDID)
+	block, raw, err := CreateRestrictBlock(parent, "did:key:zB", parent.DL-1, sampleCaveats(t), agentKey)
+	if err != nil {
+		t.Fatalf("CreateRestrictBlock: %v", err)
+	}
+	if _, err := ParseRestrictBlock(raw); err != nil {
+		t.Fatalf("canonical bytes rejected: %v", err)
+	}
+
+	// Same object, same valid signature, different bytes — and therefore a
+	// different CID under an unfixed parser.
+	indented, err := json.MarshalIndent(block, "", "  ")
+	if err != nil {
+		t.Fatalf("MarshalIndent: %v", err)
+	}
+	if string(indented) == string(raw) {
+		t.Fatal("indented form is identical to canonical form; test is vacuous")
+	}
+	parsed, err := ParseRestrictBlock(indented)
+	if err == nil {
+		t.Fatalf("FATAL: re-encoded block accepted; cid %s vs canonical %s",
+			ComputeCID(indented), ComputeCID(raw))
+	}
+	if !errors.Is(err, ErrNonCanonical) {
+		t.Errorf("err = %v, want ErrNonCanonical", err)
+	}
+	if parsed != nil {
+		t.Error("parsed block returned alongside error")
+	}
+
+	// The re-encoded block still carries a signature that verifies: rejection
+	// must come from the byte comparison, not from a signature failure.
+	var decoded RestrictBlock
+	if err := json.Unmarshal(indented, &decoded); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if err := decoded.Verify(agentKey.Public().(ed25519.PublicKey)); err != nil {
+		t.Fatalf("re-encoded block signature does not verify: %v", err)
+	}
+}
+
 // B1: CreateRestrictBlock refuses to mint a negative depth-left, but a holder of
 // the signing key can craft the bytes directly, so the parser must refuse it too.
 func TestParseRestrictBlockRejectsNegativeDepth(t *testing.T) {

@@ -3,6 +3,7 @@
 package credential
 
 import (
+	"bytes"
 	"crypto/ed25519"
 	"encoding/json"
 	"errors"
@@ -37,6 +38,7 @@ var (
 	ErrTooManyCaveats      = errors.New("RESTRICT block exceeds the caveat limit")
 	ErrDepthNotReduced     = errors.New("delegation depth-left was not strictly reduced")
 	ErrNegativeDepth       = errors.New("delegation depth-left is negative")
+	ErrNonCanonical        = errors.New("block bytes are not the canonical serialization of the parsed object")
 	ErrExpiryEscalation    = errors.New("child exp exceeds parent exp")
 	ErrNotBeforeRegression = errors.New("child nbf precedes parent nbf")
 	ErrIssuerMismatch      = errors.New("block issuer does not equal parent audience")
@@ -131,8 +133,9 @@ func CreateRestrictBlock(parent DelegationParent, audDID string, childDL int, ca
 }
 
 // ParseRestrictBlock decodes and structurally validates a RESTRICT block. It
-// enforces the I-JSON profile (SD-3) and the typ tag but does not verify the
-// signature; use Verify for that.
+// enforces the I-JSON profile (SD-3), the SD-6 raw-bytes/re-serialization
+// equality rule, and the typ tag, but does not verify the signature; use Verify
+// for that.
 func ParseRestrictBlock(raw []byte) (*RestrictBlock, error) {
 	if err := signing.ValidateIJSON(raw); err != nil {
 		return nil, fmt.Errorf("adtp/credential: %w: %v", ErrNotRestrictBlock, err)
@@ -157,6 +160,16 @@ func ParseRestrictBlock(raw []byte) (*RestrictBlock, error) {
 	// only by the chain-depth cap.
 	if block.DL < 0 {
 		return nil, fmt.Errorf("adtp/credential: %w: %d", ErrNegativeDepth, block.DL)
+	}
+	// SD-6: the received bytes must be the canonical serialization of the object
+	// they decode to. Without this one credential admits unboundedly many CIDs,
+	// and credential-scoped revocation of a leaf is evaded by re-encoding it.
+	canonical, err := block.CanonicalBytes()
+	if err != nil {
+		return nil, fmt.Errorf("adtp/credential: %w: %v", ErrNonCanonical, err)
+	}
+	if !bytes.Equal(canonical, raw) {
+		return nil, fmt.Errorf("adtp/credential: %w", ErrNonCanonical)
 	}
 	return &block, nil
 }

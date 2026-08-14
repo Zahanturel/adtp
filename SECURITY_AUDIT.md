@@ -13,7 +13,7 @@ Nothing here is softened. Several findings remain open.
 
 | | Count |
 |---|---|
-| Findings resolved | 4 |
+| Findings resolved | 5 |
 | Findings open | 8 |
 | Findings withdrawn as incorrect | 2 |
 | Claims verified | 4 (1 confirmed, 2 partial, 1 **withdrawn — this audit got it wrong**) |
@@ -166,6 +166,18 @@ onward, bounded only by `MaxChainDepth`. This is the defect that falsifies claim
 `dl_negative` through the full verifier and `dl_negative_at_linkage` directly against step 2,
 for chains that reach the verifier without being re-parsed — plus a parser-level test in
 `internal/credential/restrict_test.go`. All three fail against the unfixed code.
+
+**F15 — SD-6 was unimplemented for RESTRICT blocks.** *(MEDIUM; found by external audit)*
+`docs/PROTOCOL.md` SD-6 requires rejection on any divergence between the raw-byte hash and
+the re-serialized hash of the parsed object. `RestrictBlock.Verify` re-marshals the parsed
+struct before checking the signature, so a re-encoded block still verified; nothing compared
+the received bytes to `CanonicalBytes()`. One credential therefore admitted unboundedly many
+CIDs — `json.MarshalIndent` of a valid block yields different bytes, a different CID, and a
+signature that still verifies. Consequence: credential-scoped revocation of a leaf is evaded
+by re-encoding it once inline chain presentation ships. Not reachable today, because every
+block the daemon resolves comes from its own store under a CID it verified.
+*Resolved:* `ParseRestrictBlock` now compares the received bytes to the canonical
+re-serialization and rejects on any difference.
 
 **F1 — Agent keys were memory-only on every backend.** *(was: highest severity)*
 The daemon wired `identity.NewMemoryKeyStore()` unconditionally, and it was the only
