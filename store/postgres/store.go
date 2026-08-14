@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 // Package postgres is the PostgreSQL storage backend. It implements the unified
 // store.Store interface over a pgx connection pool, with transactional writes
 // for the operations that must be atomic.
@@ -26,7 +28,9 @@ import (
 //go:embed schema.sql
 var Schema string
 
-const expectedSchemaVersion = 1
+// expectedSchemaVersion is the newest schema this build understands. Version 2
+// added the agent_keys table (persistent custodial key store).
+const expectedSchemaVersion = 2
 
 // Store errors.
 var (

@@ -1,5 +1,7 @@
 //go:build integration
 
+// SPDX-License-Identifier: Apache-2.0
+
 package postgres
 
 import (
@@ -7,6 +9,7 @@ import (
 	"crypto/ed25519"
 	"errors"
 	"os"
+	"sort"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -29,7 +32,7 @@ func testStore(t *testing.T) *PostgresStore {
 		t.Fatalf("NewPostgresStore: %v", err)
 	}
 	t.Cleanup(func() { _ = s.Close() })
-	for _, tbl := range []string{"audit_log", "revocation_entries", "registration_index", "credentials", "agents"} {
+	for _, tbl := range []string{"audit_log", "revocation_entries", "registration_index", "credentials", "agents", "agent_keys"} {
 		if _, err := s.pool.Exec(t.Context(), "TRUNCATE "+tbl+" RESTART IDENTITY CASCADE"); err != nil {
 			t.Fatalf("truncate %s: %v", tbl, err)
 		}
@@ -304,5 +307,134 @@ func TestPostgresAgents(t *testing.T) {
 	}
 	if got.SponsorDID != "did:key:zSponsor" {
 		t.Errorf("sponsor = %q, want %q", got.SponsorDID, "did:key:zSponsor")
+	}
+}
+
+// --- key store ---
+
+func TestPostgresKeyStoreRoundTrip(t *testing.T) {
+	s := testStore(t)
+	ks := s.Keys()
+
+	priv, did := mustKey(t)
+	if err := ks.Store(did, priv); err != nil {
+		t.Fatalf("Store: %v", err)
+	}
+	got, err := ks.Load(did)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if !got.Equal(priv) {
+		t.Error("loaded key does not equal the stored key")
+	}
+	// The returned slice must be a copy: mutating it must not corrupt the store.
+	got[0] ^= 0xff
+	again, err := ks.Load(did)
+	if err != nil {
+		t.Fatalf("Load after mutation: %v", err)
+	}
+	if !again.Equal(priv) {
+		t.Error("mutating a loaded key altered the stored key")
+	}
+}
+
+// TestPostgresKeyStoreSurvivesReconnect is the reason this backend exists: a new
+// pool against the same database — what a daemon restart looks like — must still
+// resolve keys registered by the previous process.
+func TestPostgresKeyStoreSurvivesReconnect(t *testing.T) {
+	s := testStore(t)
+	priv, did := mustKey(t)
+	if err := s.Keys().Store(did, priv); err != nil {
+		t.Fatalf("Store: %v", err)
+	}
+
+	reopened, err := NewPostgresStore(os.Getenv("ADTP_TEST_POSTGRES_DSN"))
+	if err != nil {
+		t.Fatalf("reopen store: %v", err)
+	}
+	defer reopened.Close()
+
+	got, err := reopened.Keys().Load(did)
+	if err != nil {
+		t.Fatalf("Load after reconnect: %v", err)
+	}
+	if !got.Equal(priv) {
+		t.Error("key did not survive reconnect intact")
+	}
+}
+
+func TestPostgresKeyStoreMissingAndDelete(t *testing.T) {
+	s := testStore(t)
+	ks := s.Keys()
+
+	if _, err := ks.Load("did:key:zAbsent"); !errors.Is(err, identity.ErrKeyNotFound) {
+		t.Errorf("Load(absent) error = %v, want identity.ErrKeyNotFound", err)
+	}
+	if err := ks.Delete("did:key:zAbsent"); !errors.Is(err, identity.ErrKeyNotFound) {
+		t.Errorf("Delete(absent) error = %v, want identity.ErrKeyNotFound", err)
+	}
+
+	priv, did := mustKey(t)
+	if err := ks.Store(did, priv); err != nil {
+		t.Fatalf("Store: %v", err)
+	}
+	if err := ks.Delete(did); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+	if _, err := ks.Load(did); !errors.Is(err, identity.ErrKeyNotFound) {
+		t.Errorf("Load after Delete error = %v, want identity.ErrKeyNotFound", err)
+	}
+}
+
+func TestPostgresKeyStoreRejectsBadInput(t *testing.T) {
+	ks := testStore(t).Keys()
+	priv, _ := mustKey(t)
+
+	if err := ks.Store("", priv); !errors.Is(err, identity.ErrEmptyDID) {
+		t.Errorf("Store(empty did) error = %v, want identity.ErrEmptyDID", err)
+	}
+	if err := ks.Store("did:key:zShort", priv[:16]); !errors.Is(err, identity.ErrInvalidPrivateKey) {
+		t.Errorf("Store(short key) error = %v, want identity.ErrInvalidPrivateKey", err)
+	}
+}
+
+// TestPostgresKeyStoreRejectsCorruptRow guards the panic path: ed25519.Sign
+// panics on a wrong-sized key, so a corrupt row must fail at Load.
+func TestPostgresKeyStoreRejectsCorruptRow(t *testing.T) {
+	s := testStore(t)
+	if _, err := s.pool.Exec(t.Context(),
+		`INSERT INTO agent_keys (did, private_key, created_at) VALUES ($1, $2, 0)`,
+		"did:key:zCorrupt", []byte{1, 2, 3}); err != nil {
+		t.Fatalf("insert corrupt row: %v", err)
+	}
+	if _, err := s.Keys().Load("did:key:zCorrupt"); !errors.Is(err, identity.ErrInvalidPrivateKey) {
+		t.Errorf("Load(corrupt) error = %v, want identity.ErrInvalidPrivateKey", err)
+	}
+}
+
+func TestPostgresKeyStoreList(t *testing.T) {
+	ks := testStore(t).Keys()
+	if got := ks.List(); len(got) != 0 {
+		t.Errorf("List() on empty store = %v, want empty", got)
+	}
+
+	var dids []string
+	for i := 0; i < 3; i++ {
+		priv, did := mustKey(t)
+		if err := ks.Store(did, priv); err != nil {
+			t.Fatalf("Store: %v", err)
+		}
+		dids = append(dids, did)
+	}
+	sort.Strings(dids)
+
+	got := ks.List()
+	if len(got) != len(dids) {
+		t.Fatalf("List() returned %d DIDs, want %d", len(got), len(dids))
+	}
+	for i := range dids {
+		if got[i] != dids[i] {
+			t.Errorf("List()[%d] = %q, want %q (must be ascending)", i, got[i], dids[i])
+		}
 	}
 }

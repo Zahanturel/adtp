@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 // Command adtpd is the ADTP daemon: it loads configuration, initializes a
 // storage backend and the platform identity, and serves the v1 HTTP API.
 package main
@@ -74,7 +76,7 @@ func runServer(ctx context.Context, cfg *config.Config, logger *slog.Logger) err
 	if err != nil {
 		return err
 	}
-	defer st.Close()
+	defer func() { _ = st.Close() }()
 
 	// Reconcile the registration index on startup to backfill any entries
 	// missed by a prior crash between PutCredential and Register.
@@ -123,19 +125,23 @@ func runServer(ctx context.Context, cfg *config.Config, logger *slog.Logger) err
 // API keys, nonce cache, boot time, and optional OIDC auth / SIEM export. The
 // returned store is the caller's to Close. SIEM export runs until ctx is done.
 func newService(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*v1.Service, store.Store, error) {
-	st, err := newStore(cfg)
+	st, keys, err := newStore(cfg)
 	if err != nil {
 		return nil, nil, err
+	}
+	if cfg.Store.Backend != "postgres" {
+		logger.Warn("memory backend: agent keys are not persisted; after a restart this daemon cannot delegate or sign invocations for any agent registered before it",
+			"backend", cfg.Store.Backend)
 	}
 
 	key, did, err := loadOrCreatePlatformKey(cfg, logger)
 	if err != nil {
-		st.Close()
+		_ = st.Close()
 		return nil, nil, err
 	}
 	apiKeys, err := loadOrCreateAPIKeys(cfg, logger)
 	if err != nil {
-		st.Close()
+		_ = st.Close()
 		return nil, nil, err
 	}
 
@@ -145,7 +151,7 @@ func newService(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*
 
 	svc := &v1.Service{
 		Store:       st,
-		Keys:        identity.NewMemoryKeyStore(),
+		Keys:        keys,
 		PlatformKey: key,
 		PlatformDID: did,
 		Config:      cfg,
@@ -163,7 +169,7 @@ func newService(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*
 	if cfg.Integrations.SIEMWebhook.URL != "" {
 		exporter, err := newSIEMExporter(cfg, logger)
 		if err != nil {
-			st.Close()
+			_ = st.Close()
 			return nil, nil, err
 		}
 		exporter.Start(ctx)
@@ -221,12 +227,20 @@ func serve(ctx context.Context, srv *http.Server, cfg *config.Config, logger *sl
 	}
 }
 
-func newStore(cfg *config.Config) (store.Store, error) {
+// newStore opens the configured storage backend and returns it together with
+// the key store that matches it. The postgres backend persists agent keys so
+// they survive a restart; the memory backend does not, and every agent
+// registered before a restart becomes unusable after one (see README "Status").
+func newStore(cfg *config.Config) (store.Store, identity.KeyStore, error) {
 	switch cfg.Store.Backend {
 	case "postgres":
-		return postgres.NewPostgresStore(cfg.Store.Postgres)
+		st, err := postgres.NewPostgresStore(cfg.Store.Postgres)
+		if err != nil {
+			return nil, nil, err
+		}
+		return st, st.Keys(), nil
 	default:
-		return memory.New(), nil
+		return memory.New(), identity.NewMemoryKeyStore(), nil
 	}
 }
 

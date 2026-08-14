@@ -1,5 +1,5 @@
--- ADTP PostgreSQL storage schema.
--- Applied by the daemon at startup (driver integration arrives in Phase 4).
+-- ADTP PostgreSQL storage schema. Applied by the daemon at every startup; every
+-- statement is idempotent so it doubles as the migration path.
 
 -- Schema versioning: the daemon checks this table at startup and refuses to
 -- start if the version is newer than what it understands.
@@ -8,6 +8,21 @@ CREATE TABLE IF NOT EXISTS schema_version (
     applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 INSERT INTO schema_version (version) SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM schema_version);
+INSERT INTO schema_version (version) SELECT 2 WHERE NOT EXISTS (SELECT 1 FROM schema_version WHERE version = 2);
+
+-- Agent private keys, for the custodial key store.
+--
+-- SECURITY: private_key holds a raw Ed25519 private key in plaintext. The
+-- daemon is a custodial identity service — it signs on each agent's behalf, so
+-- it must be able to recover the key material. Anyone with read access to this
+-- table can impersonate every agent in it. Protect it with database-level
+-- encryption at rest, restrictive grants, and network isolation. An HSM-backed
+-- custody path is future work; see README "Status".
+CREATE TABLE IF NOT EXISTS agent_keys (
+    did         TEXT PRIMARY KEY,
+    private_key BYTEA NOT NULL,
+    created_at  BIGINT NOT NULL
+);
 
 CREATE TABLE IF NOT EXISTS agents (
     did           TEXT PRIMARY KEY,

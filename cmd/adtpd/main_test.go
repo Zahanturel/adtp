@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 package main
 
 import (
@@ -14,6 +16,7 @@ import (
 	"testing"
 
 	"github.com/Zahanturel/adtp/config"
+	"github.com/Zahanturel/adtp/internal/identity"
 )
 
 func freePort(t *testing.T) int {
@@ -183,18 +186,26 @@ func TestNewServiceSIEMBadInterval(t *testing.T) {
 
 func TestNewStore(t *testing.T) {
 	cfg := config.Default() // memory backend
-	st, err := newStore(cfg)
+	st, keys, err := newStore(cfg)
 	if err != nil {
 		t.Fatalf("newStore(memory): %v", err)
 	}
-	st.Close()
+	defer st.Close()
+	if keys == nil {
+		t.Fatal("newStore(memory) returned a nil key store")
+	}
+	// The memory backend must pair with the memory key store: agent keys do not
+	// survive a restart, which the daemon warns about at startup.
+	if _, ok := keys.(*identity.MemoryKeyStore); !ok {
+		t.Errorf("key store is %T, want *identity.MemoryKeyStore", keys)
+	}
 }
 
 func TestNewStorePostgresInvalidDSN(t *testing.T) {
 	cfg := config.Default()
 	cfg.Store.Backend = "postgres"
 	cfg.Store.Postgres = "garbage" // fails to parse — returns fast, no connect hang
-	if _, err := newStore(cfg); err == nil {
+	if _, _, err := newStore(cfg); err == nil {
 		t.Errorf("newStore(bad postgres dsn) = nil, want error")
 	}
 }
