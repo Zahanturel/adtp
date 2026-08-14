@@ -53,7 +53,6 @@ Coordinated disclosure timelines are negotiable where a fix requires longer. Rep
 - Replay, confused-deputy, and time-of-check/time-of-use conditions in the daemon
 
 **Out of scope**
-- The landing page (`site/`)
 - Vulnerabilities in dependencies without a demonstrated exploit path through ADTP (report upstream; mention here if ADTP's usage is affected)
 - Denial of service via resource exhaustion on unauthenticated endpoints where rate limiting is the deployer's responsibility
 - Misconfiguration of a deploying system that ADTP does not control
