@@ -18,7 +18,7 @@ make test         # runs unit tests (in-memory backend)
 make vet          # static analysis
 ```
 
-Requires Go 1.22+ (for method+path routing in `net/http`).
+Requires Go 1.26.6+. The floor is set by `go.mod` and tracks standard-library security fixes, not language features — the code itself needs only 1.22 (method+path routing in `net/http`).
 
 ## Running the daemon locally
 
