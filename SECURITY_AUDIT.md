@@ -13,7 +13,7 @@ Nothing here is softened. Several findings remain open.
 
 | | Count |
 |---|---|
-| Findings resolved | 7 |
+| Findings resolved | 8 |
 | Findings open | 9 |
 | Findings withdrawn as incorrect | 2 |
 | Claims verified | 4 (1 confirmed, 2 partial, 1 **withdrawn — this audit got it wrong**) |
@@ -197,6 +197,36 @@ by re-encoding it once inline chain presentation ships. Not reachable today, bec
 block the daemon resolves comes from its own store under a CID it verified.
 *Resolved:* `ParseRestrictBlock` now compares the received bytes to the canonical
 re-serialization and rejects on any difference.
+
+**F19 — A test that passes against unfixed code has told you nothing.** *(Method finding, not
+a vulnerability. Recorded because it changed the outcome of F18.)*
+
+The JWKS locking defect was reported as "`keys()` holds the mutex across a 10-second fetch, so
+one slow IdP serializes every authenticated request." The obvious fix is to stop holding the
+lock across the fetch. That fix was written, a test was written with it, and **the test passed
+against the original implementation** — in 11 seconds rather than 0.03, but passed.
+
+That result was the finding. The test had not measured the stall; the stall had moved into the
+test's own setup, where it was silently waited on rather than asserted. Had the run been
+treated as confirmation, a fix that did not address the actual failure mode would have shipped
+with a green test attesting that it did.
+
+Reading it properly showed a worse bug than the one reported. A *successful* fetch populates
+the cache, so callers queued behind it find it fresh and the cost is one timeout. A **failed or
+hanging** fetch leaves the cache stale — so each queued caller acquired the mutex in turn,
+issued its own request, and waited its own full timeout. N callers against an unresponsive IdP
+cost N sequential timeouts, not one. The reported symptom was request serialization; the actual
+behaviour was serialized amplification of the outage.
+
+*Resolved:* concurrent refreshes are coalesced into a single in-flight request whose result
+every waiter shares, and the cache lock is never held across the network call. Two tests, both
+verified to fail against the original code: `8 upstream JWKS requests for 8 concurrent callers,
+want 1`, and a fresh-cache read blocked more than two seconds behind a hung fetch.
+
+The general rule, which applies to every other entry in this document: **a new test must be run
+against the unfixed code and observed to fail before its passing run means anything.** Every
+fix in F14, F15 and F18 was checked that way. Where a test could not be made to discriminate,
+that is stated rather than glossed — see the note on the three benign asymmetries in F16.
 
 **F18 — Control-plane and primitive defects.** Seven, found by the same external audit,
 grouped because they were fixed together:

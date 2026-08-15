@@ -4,9 +4,12 @@
 [![Go Reference](https://pkg.go.dev/badge/github.com/Zahanturel/adtp.svg)](https://pkg.go.dev/github.com/Zahanturel/adtp)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
-ADTP is a protocol and Go daemon for bounded, revocable delegation between software agents:
-each agent holds its own Ed25519 keypair, every delegation is a signed link in a chain, and
-revoking a link denies everything beneath it.
+ADTP is a protocol and Go daemon that produces a **non-repudiable, per-hop, issuer-signed,
+hash-linked record of which agent authorized which sub-agent to do what** — and where
+revoking any link in that record denies the entire subtree beneath it, at verification time,
+without enumerating descendants.
+
+That is the contribution. Everything else here is in service of it.
 
 ## The problem
 
@@ -33,37 +36,111 @@ certificate, not a delegation subtree.
 
 So: an agent you have revoked can still act, through a delegate you cannot enumerate.
 
-## The core design decision
+## What this actually provides
 
-Attenuation is a property of the token structure, not a check performed at policy
-evaluation time.
+**Every hop is a record.** A delegation is not a copied secret and not a freshly minted
+token that forgets where it came from. It is a signed object naming its issuer, its
+audience, and the SHA-256 CID of its parent — content and signature together. The chain from
+any leaf to its root is therefore an attributable statement: *this* agent, holding *this*
+key, authorized *that* agent, at *this* time, under *these* caveats. Ed25519 signatures make
+it non-repudiable per hop; an HMAC scheme cannot do this, because anyone who can verify can
+also mint.
 
-The usual approach is a comparison. The child token restates its permissions, and the
-verifier computes whether the child's set is a subset of the parent's — comparing scope
-strings, or URI patterns, or Datalog predicates. That comparison function is then part of
-the trusted computing base: every escalation bug in it is an escalation bug in the system.
-It has to decide whether `read:files/*` covers `read:files/../etc/passwd`, whether
-`budget<=100` refines `budget<=50`, whether an unrecognized field is safe to ignore. Get
-any case wrong and a child mints authority its parent never held.
+**Revoking any ancestor denies the whole subtree.** Verification cannot proceed without
+reconstructing the chain to its root (step 1). Step 6 then checks the revocation state of
+**every element's CID and every element's audience** on the reconstructed chain:
 
-ADTP's primary mode, RESTRICT, removes the comparison instead of trying to make it
-correct. A delegation is a signed block that carries **no capability set at all** — only
-`prf` (the parent's content hash), a shrinking depth counter, a validity window that
-cannot widen, and a list of caveats:
+```go
+subjects := make(map[string]struct{})
+for _, e := range chain.Elements {
+    subjects[e.CID] = struct{}{}
+    subjects[elemAud(e)] = struct{}{}
+}
+```
+
+The root-walk is not an optional enrichment a deployment can skip for latency — it is how
+the verifier learns what the leaf is authorized to do at all. A revoked ancestor is
+therefore always in the set being checked. This does not depend on enumerating descendants,
+on a registration index, or on a transparency log.
+
+That is the gap UCAN's own revocation specification declines to close: it states that
+revoking a proof does not guarantee the agent can no longer access the capability, because a
+UCAN verifier is not obliged to reconstruct and re-check the proof chain on every
+invocation. Here it is obliged, because it cannot compute authority any other way.
+
+**Where that leaves the limits.** Verification is complete; the *published* revocation state
+is not. The difference is documented under "Four qualifications on revocation" below, with a
+worked example showing `/v1/status/{cid}` reporting `revoked:false` for a credential that
+`/v1/verify` denies. Read that section before relying on any of this.
+
+## Prior art
+
+Restriction-only attenuation — a delegation that adds caveats and never restates authority —
+is **established prior art, not a contribution of this project.** It was arrived at here
+independently, which is not the same as arriving at it first. A reader who finds any of the
+following before finding this section should discount the rest of the page, so it is stated
+up front rather than in a footnote:
+
+- **Macaroons** (Birgisson et al., NDSS 2014) got the attenuation model right first: append
+  caveats, never restate authority, intersect at verification. A RESTRICT block is closer to
+  a macaroon than to anything in the UCAN specification.
+- **Biscuit** (v2/v3) is the closest system to this one — public-key, append-only attenuation
+  blocks, offline-verifiable. Its authorization language is Datalog rather than a fixed
+  caveat vocabulary.
+- **UCAN 1.0** expresses attenuated delegation through `cmd` plus `pol`, covering much of
+  what caveats do here.
+- **The caretaker pattern** from the object-capability literature is the same idea again and
+  older than all of it: hand out a revocable forwarder rather than the authority itself.
+- **AIP** — Agent Interaction Protocol ([arXiv 2603.24775](https://arxiv.org/abs/2603.24775),
+  now [draft-prakash-aip-00](https://datatracker.ietf.org/doc/draft-prakash-aip/)) — ships
+  the same attenuation model, and ships transport bindings for MCP, A2A and HTTP that this
+  project has specified and not built.
+
+**On Biscuit, be precise about the delta.** A Biscuit token carries its ancestor blocks
+inline and each block has a revocation identifier, so revoking a parent block denies every
+attenuated descendant that carries it. Subtree denial is achievable there. The difference is
+narrower than "Biscuit cannot do this": here the ancestor walk is *structurally unavoidable*,
+because authority is not present in the leaf and must be computed from the root, whereas a
+Biscuit verifier already holds every block and must be configured to check their revocation
+identifiers. Whether that distinction matters to you depends on whether you would rather rely
+on a step that cannot be skipped or one that can.
+
+**On AIP:** it defers revocation to a future version. That is the axis on which these two
+designs differ, and it is the axis this project should be judged on — not attenuation, where
+AIP and this arrive at the same place.
+
+**The closed caveat vocabulary versus Biscuit's Datalog is an engineering tradeoff, not a
+discovery.** A fixed set of caveat types with a fail-closed `default:` branch is a smaller
+trusted computing base than a Datalog evaluator and easier to bound on adversarial input. It
+is also strictly less expressive, and the cost of that is visible in this repository's own
+history: `action_restrict` was added in v0.2.0 because the vocabulary could not express
+read-only delegation — a root holding `resource/read` and `resource/write` over one URI space
+had no way to delegate either one alone. That is the vocabulary growing under pressure from
+the first serious scenario anyone tried, which is precisely the failure mode a Datalog engine
+does not have. Expect it to grow again. [DESIGN.md](DESIGN.md) works the tradeoff through in
+full.
+
+## How attenuation works
+
+This is an implementation detail of the record above, not the headline.
+
+A delegation is a signed block carrying **no capability set at all** — only `prf` (the
+parent's content hash), a shrinking depth counter, a validity window that cannot widen, and
+a list of caveats:
 
 ```json
 { "typ": "adtp/cav/1",
   "iss": "<parent's audience>", "aud": "<child>",
   "prf": "bafkrei...",           // content hash of the parent
   "nbf": 1786691217, "exp": 1786694817,
-  "dl":  2,                      // strictly less than the parent's
+  "dl":  2,                      // in [0, parent's dl)
   "cav": [ {"type":"resource_restrict","resource":"tool://search.example/web"} ],
   "sig": "..." }
 ```
 
-The leaf's authority is the root credential's capability set **intersected with every
-caveat on the path**, evaluated when the request arrives. A block can only add caveats.
-There is no field in which to write a broader permission, so **chain validation performs no
+The leaf's authority is the root credential's capability set **intersected with every caveat
+on the path**, evaluated when the request arrives. A block can only add caveats. There is no
+field in which to write a broader permission, so **chain validation performs no
 set-containment comparison** — there is no capability set below the root to compare against
 anything.
 
@@ -71,16 +148,17 @@ Be precise about what that does and does not mean. Comparison did not leave the 
 moved. `CanonicalizeURI` and `URICovers` still run at authorization
 ([`internal/verify/steps.go`](internal/verify/steps.go) step 8), on every verification, and
 `evaluateConstraint` still dispatches nine constraint types. What the structure removes is
-per-hop semantic comparison against a parent. The difference is where a mistake lands: in
-the usual design a comparison bug widens a credential permanently; here a bug in `URICovers`
+per-hop semantic comparison against a parent. The difference is where a mistake lands: in the
+usual design a comparison bug widens a credential permanently; here a bug in `URICovers`
 denies a request or authorizes one resource wrongly, against a grant the platform wrote and
-signed. Fewer places to be wrong, and a smaller blast radius when you are. Not zero.
+signed. Fewer places to be wrong, and a smaller blast radius when you are. Not zero — and
+[SECURITY_AUDIT.md](SECURITY_AUDIT.md) F14 is the standing evidence: an exploitable hole that
+involved no comparison code at all.
 
-Until v0.2 this was qualified further, because a second mode (RESTATE) did restate
-capabilities and did run a 115-line comparison function. That mode is removed as of v0.2.0,
-along with `CapabilityLeq`, the `att_seal` machinery, and the `mode` parameter on the
-delegations API. There is one delegation mode. See [DESIGN.md](DESIGN.md) for what its
-removal bought and what it cost.
+Until v0.2.0 this was qualified further, because a second mode (RESTATE) did restate
+capabilities and did run a 115-line comparison function. That mode is removed, along with
+`CapabilityLeq`, the `att_seal` machinery, and the `mode` parameter on the delegations API.
+There is one delegation mode.
 
 ## How it works
 
@@ -94,30 +172,38 @@ agent as `aud`. Each delegation adds a block whose `prf` is the SHA-256-based CI
 parent's complete serialized bytes, signature included. Pinning the hash pins content and
 signature together.
 
-**Verification** runs 13 ordered steps, failing on the first violation. Two ordering
-choices matter: cycles are detected in step 1, before any signature is verified, so a
-malicious cyclic chain costs one hash per hop rather than one Ed25519 verify; and the
-replay nonce is consumed in step 10 only *after* the invocation signature validates, so
-forged invocations cannot exhaust the cache. The steps are chain build, structural checks,
-per-hop linkage, root trust, signatures, temporal validity, revocation, attenuation
-integrity, authorization, cross-org policy, proof-of-possession, registration, audit.
+**Verification** runs the specification's thirteen ordered steps, failing on the first
+violation. **Nine of those thirteen can deny a request.** The number 13 comes from the spec,
+and quoting it without saying which steps carry weight is how a pipeline sounds more thorough
+than it is:
 
-**Revocation** is where the chain shape pays off. Step 1 always reconstructs the chain to
-its root. Step 6 then checks **every element's CID and every element's audience** against
-revocation state ([`internal/verify/steps.go`](internal/verify/steps.go)):
+The nine that can deny: chain build, structural checks, per-hop linkage, root trust,
+signatures, temporal validity, revocation, authorization, proof-of-possession.
 
-```go
-subjects := make(map[string]struct{})
-for _, e := range chain.Elements {
-    subjects[e.CID] = struct{}{}
-    subjects[elemAud(e)] = struct{}{}
-}
-```
+The other four, and why:
 
-A revoked ancestor is therefore always in the set being checked, and its whole subtree is
-denied. That does not depend on enumerating descendants, on a registration index, or on a
-transparency log — it falls out of the fact that verification cannot proceed without
-walking to the root.
+- **Step 7 (attenuation integrity) is a no-op by design.** Since RESTATE was removed only the
+  root carries a capability set, so no hop can widen one and there is nothing per-hop to
+  check. This is the design working, not a feature missing — see
+  [`internal/verify/steps.go`](internal/verify/steps.go).
+- **Step 9 (cross-org policy) returns immediately.** Nothing populates `TrustPolicies` from
+  configuration, so no chain is ever classified cross-organizational. This is a feature
+  missing.
+- **Step 11 (registration) is near-vacuous on the daemon path**: it checks the leaf against
+  the store that registered it milliseconds earlier, and degrade-accepts below `HIGH` tier.
+  It is a real check only for a credential registered by some other process.
+- **Step 12 (audit) does work but cannot fail verification** — it writes a hash-linked entry
+  and its error is discarded, so an audit-log outage never denies a request. That is a
+  deliberate availability choice, stated here because "13 steps including audit" implies a
+  gate that does not exist.
+
+Two ordering choices among the nine matter: cycles are detected in step 1, before any
+signature is verified, so a malicious cyclic chain costs one hash per hop rather than one
+Ed25519 verify; and the replay nonce is consumed in step 10 only *after* the invocation
+signature validates, so forged invocations cannot exhaust the cache.
+
+**Revocation** is covered under [What this actually provides](#what-this-actually-provides)
+above; the worked example below shows both what it catches and what it fails to publish.
 
 ### Worked example
 
@@ -327,7 +413,8 @@ has no users, no released version, and no stability guarantees; the wire format 
 without a migration path.
 
 **Implemented:** did:key/Ed25519 identity; UCAN credential chains; RESTRICT
-delegation; the 13-step verification pipeline; signed revocation entries and lists, with
+delegation; the verification pipeline (nine of thirteen steps can deny — see above); signed
+revocation entries and lists, with
 `COMPROMISED` cascade and registration-index reconciliation; a hash-linked audit log; OIDC
 bearer auth (RS256 against a JWKS URL); batched audit export to an HTTP webhook; in-memory
 and PostgreSQL backends. RESTRICT is exercised by eight adversarial escalation vectors in
@@ -336,8 +423,11 @@ and PostgreSQL backends. RESTRICT is exercised by eight adversarial escalation v
 **Not implemented,** though named in the protocol design: transparency-log-backed
 registration, `on_behalf_of` dual-chain verification (invocations carrying it are rejected
 rather than silently accepted), TLS-exporter channel binding, session credentials, budget
-metering, did:web organizational federation, and MCP/A2A transport bindings. See
-[DESIGN.md](DESIGN.md#scope).
+metering, did:web organizational federation, and MCP/A2A transport bindings. These are
+described in [docs/PROTOCOL.md](docs/PROTOCOL.md) Appendix A, which is explicitly a roadmap
+and not a description of this binary. Worth naming plainly: AIP already ships the transport
+bindings, so on that axis this project is behind, not ahead. See [DESIGN.md](DESIGN.md#scope)
+and [Prior art](#prior-art).
 
 **Agent keys are held by the daemon in plaintext.** This is a custodial service: it signs
 on each agent's behalf, so it must be able to recover the key material. With the PostgreSQL
@@ -368,9 +458,12 @@ trusted to act for every agent in the key store.
 
 ## Specification, design notes, license
 
-- [docs/PROTOCOL.md](docs/PROTOCOL.md) — the protocol specification: wire formats, the 13
-  steps, the revocation authority model, 13 adversary classes, 10 security properties.
-- [DESIGN.md](DESIGN.md) — why UCAN over macaroons, biscuits, and scoped JWTs; why did:key
+- [docs/PROTOCOL.md](docs/PROTOCOL.md) — the specification. **Part I describes what this
+  binary does; Appendix A is a roadmap of things that are not built.** They are segregated
+  because a previous revision described roughly 40% more system than the code implements,
+  without saying so.
+- [DESIGN.md](DESIGN.md) — the long form of [Prior art](#prior-art): why UCAN over macaroons,
+  biscuits, the caretaker pattern and scoped JWTs, and how this compares to AIP; why did:key
   over did:web; what this design gives up; what the implementation revealed.
 - [SECURITY_AUDIT.md](SECURITY_AUDIT.md) — an audit of this implementation against its own
   claims, including what is still open.

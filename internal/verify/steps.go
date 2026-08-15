@@ -328,10 +328,14 @@ func statusError(status revocation.RevocationStatus) *VerificationError {
 // comparisons already enforced in step 2. This is the property RESTATE's removal
 // bought: chain validation performs no set-containment comparison at any hop.
 //
-// The step is kept as a named no-op rather than deleted so the pipeline's step
-// numbering stays aligned with the specification, and so that any future hop
-// type carrying its own capabilities has an obvious place to be checked — and an
-// obvious reason to be argued about first.
+// DO NOT DELETE AS DEAD CODE. The step is deliberately a named no-op. It keeps
+// the pipeline's numbering aligned with the specification, and it is the place
+// any future hop type that carries its own capability set would have to be
+// checked. Reaching for it is the signal to stop: reintroducing such a hop
+// reintroduces set-containment comparison into chain validation, which is the
+// single property this design is built on, and it needs to be argued for
+// explicitly rather than arrived at by adding a field. RESTATE is what that
+// looked like the first time; see DESIGN.md.
 func step7Attenuation(chain *delegation.Chain) error {
 	for i := 0; i+1 < len(chain.Elements); i++ {
 		if chain.Elements[i].Token != nil {

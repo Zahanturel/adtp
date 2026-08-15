@@ -1,19 +1,58 @@
-# ADTP v0.3 — Complete Protocol Specification
+# ADTP v0.3 — Protocol Specification
+
 ## Agent Delegation and Trust Protocol
-### Supersedes v0.2 in full. Structural revision: restriction-mode attenuation, transparency log, sessions, budgeted delegation, revocation authority model, first-use registration, canonical signing discipline.
+
+---
+
+## Reading this document
+
+**Part I is normative and describes what the daemon in this repository actually does.**
+Every mechanism in Part I is implemented, tested, and reachable through `adtpd`.
+
+**Appendix A is a roadmap.** Its sections were specified before they were built and none of
+them are built. They are retained because they record design intent, and they are segregated
+because mixing them with Part I forced every serious reader to do reconciliation work before
+they could evaluate anything. A previous revision of this document described roughly 40% more
+system than the binary implements, without saying so.
+
+Section numbers are preserved from the pre-segregation revision, so Appendix A's sections are
+numbered 12, 14, 15, 16, 19, 20, 21 and 23 rather than renumbered. External references still
+resolve; the numbering is non-contiguous on purpose.
+
+Where Part I describes something implemented but not enforced — the metering-dependent caveats
+are the main case — it says so at that point.
 
 ---
 
 ## 1. What ADTP Is
 
-A cryptographic protocol for AI agent identity, delegation, credential lifecycle, and cross-organizational trust — the authorization control plane for autonomous agents.
+A cryptographic protocol for AI agent identity, delegation, and credential lifecycle.
 
-**Architecture:** UCAN-compatible JWT credentials rooted in did:key (agents) and did:web with pinned root keys (organizations). Ed25519 today; hybrid Ed25519+ML-DSA at v1.0. One attenuation mode: RESTRICT (monotone caveat blocks; no set-containment comparison in chain validation). Proof-of-possession invocations with dual-principal authorization and TLS channel binding. Risk-tiered revocation with an explicit authority model and provably complete cascade via first-use registration. An RFC 6962-style transparency log (witness-cosigned) unifying issuance registration, revocation enumeration, and audit checkpointing. Symmetric session credentials for high-frequency invocation. Budgeted (metered) capabilities. Bilateral, non-transitive org trust with bundle distribution. Transport bindings for MCP (HTTP and stdio), A2A, and generic HTTPS.
+**What it is for.** Producing a non-repudiable, per-hop, issuer-signed, hash-linked record of
+which agent authorized which sub-agent to do what, such that revoking any element of that
+record denies the entire subtree beneath it at verification time, without enumerating
+descendants. Transitive denial is the property this protocol is organized around; everything
+else serves it.
 
-**Stack:** Go core daemon + TypeScript/Python SDKs. Apache 2.0 open-source core; commercial managed log / registry / metering network.
+**Architecture (implemented).** UCAN-compatible JWT root credentials rooted in did:key,
+Ed25519 only. One attenuation mode: RESTRICT — monotone caveat blocks, with no
+set-containment comparison in chain validation. Proof-of-possession invocations. Risk-tiered
+revocation with an explicit authority model and cascade. A hash-linked local audit log. A
+local registration index.
+
+**Prior art, stated up front.** Restriction-only attenuation is established prior art —
+macaroons (NDSS 2014), Biscuit v2/v3, UCAN 1.0's `cmd`+`pol`, and the object-capability
+caretaker pattern all express it, and AIP ([arXiv 2603.24775](https://arxiv.org/abs/2603.24775),
+[draft-prakash-aip-00](https://datatracker.ietf.org/doc/draft-prakash-aip/)) ships the same
+model. This protocol arrived at it independently, which is not the same as arriving at it
+first. The closed caveat vocabulary versus Biscuit's Datalog is an engineering tradeoff — a
+smaller trusted computing base for strictly less expressiveness — not a discovery. See the
+README's Prior art section and DESIGN.md.
+
+**Not in this document's normative part:** transparency logs, session credentials,
+organizational federation, transport bindings, post-quantum migration. See Appendix A.
 
 ---
-
 ## 2. Entity Definitions
 
 **Principal:** Any entity that can authorize actions. Tuple: `(id, key_material, authority_scope)`.
@@ -54,20 +93,28 @@ These rules apply to every signed structure in the protocol. They exist to elimi
 
 ## 4. Security Properties
 
-Status vocabulary: **SOUND-BY-CONSTRUCTION** (structural; violation requires breaking a cryptographic primitive), **SOUND** (reduction argument to standard assumptions), **DEPENDENT** (correct iff a named component is correct), **ARGUED** (informal). No property is labeled VERIFIED until the Tamarin model (Section 23) is published.
+Status vocabulary: **SOUND-BY-CONSTRUCTION** (structural; violation requires breaking a cryptographic primitive), **SOUND** (reduction argument to standard assumptions), **DEPENDENT** (correct iff a named component is correct), **ARGUED** (informal). No property is labeled VERIFIED — no formal model has been published.
 
-| ID | Property | Mechanisms | Status |
-|----|----------|-----------|--------|
-| P1 | Mutual Authentication | Ed25519 PoP + pinned org root keys + DNSSEC/CT for did:web | SOUND (argued) |
-| P2 | Delegation Integrity | Monotone-by-construction: chain escalation requires forging an issuer signature or a SHA-256 collision. No set-containment comparison in chain validation; per-hop invariants are scalar. Authorization-time URI coverage remains and is not part of this property | **SOUND-BY-CONSTRUCTION** |
-| P3 | Non-repudiation | Issuer signature per hop + ATL inclusion | SOUND (EUF-CMA) |
-| P4 | Proof-of-Possession | Invocation signature + nonce + channel binding (REQUIRED by tier) + on_behalf_of dual chain + cache-restart quarantine | SOUND (argued) |
-| P5 | Revocability | Authority model + tiered staleness + emergency channel + explicit cascade + first-use registration + reconciliation | SOUND (argued; completeness derives from the registration invariant, Section 13.6) |
-| P6 | Auditability | Hash-linked log + ATL-cosigned checkpoints + durable enqueue before allow at HIGH | SOUND (SHA-256; truncation detectable) |
-| P7 | Offline Verifiability | Self-contained chains + cached revocation | HOLDS for MEDIUM/LOW/ANALYTICS only; HIGH requires online revocation and registration evidence |
-| P8 | Scope Containment | Existential authorization + P2 + dual authorization; no union operation; multi-proof prohibited in v1.x | SOUND-BY-CONSTRUCTION |
-| P9 | Session Security | Session key bound to chain CID + channel; lifetime ≤ tier staleness bound | SOUND (argued) |
-| P10 | Minimal Disclosure | Pairwise DIDs, Delegation Gateway, hash-only audit parameters | ARGUED (no cryptographic selective disclosure until v2) |
+**Read the "In this build" column first.** Several properties are stated over mechanisms that
+Appendix A defers. Where a mechanism is not implemented, the property's status in this
+document describes the design, not the daemon.
+
+| ID | Property | Mechanisms | Status | In this build |
+|----|----------|-----------|--------|---------------|
+| P1 | Mutual Authentication | Ed25519 PoP + pinned org root keys | SOUND (argued) | **Partial** — Ed25519 PoP holds. Org root pinning is roadmap (§15). |
+| P2 | Delegation Integrity | Monotone-by-construction: chain escalation requires forging an issuer signature or a SHA-256 collision. No set-containment comparison in chain validation; per-hop invariants are scalar. Authorization-time URI coverage remains and is not part of this property | **SOUND-BY-CONSTRUCTION** | **Holds.** See SECURITY_AUDIT.md F14 for a case where a *missing* scalar invariant was exploitable — structural does not mean self-enforcing. |
+| P3 | Non-repudiation | Issuer signature per hop | SOUND (EUF-CMA) | **Holds** for the per-hop signature chain, which is the property this protocol is organized around. Transparency-log inclusion, which earlier revisions folded into this row, is roadmap (§14) and is not required for it. |
+| P4 | Proof-of-Possession | Invocation signature + nonce + cache-restart quarantine | SOUND (argued) | **Partial.** Signature, nonce and quarantine hold. Channel binding is compared when configured but nothing supplies a TLS exporter. `on_behalf_of` is unimplemented and rejected. If `verify.allow_custodial_invocation` is enabled the daemon signs the invocation itself, and the property does not hold on that path — it defaults to off. |
+| P5 | Revocability | Authority model + tiered staleness + explicit cascade + mandatory root-walk at verification | SOUND (argued) | **Holds for the verification path**, which is the strong claim: every ancestor CID and audience is checked on every verification, so revoking any ancestor denies the subtree. Does **not** hold for *published* state — explicit cascade entries are written only for `COMPROMISED`, so `/v1/status/{cid}` may report a denied credential as unrevoked. Earlier revisions attributed completeness to a "registration invariant"; that attribution was wrong, and the operative mechanism is the chain walk. |
+| P6 | Auditability | Hash-linked local log | SOUND (SHA-256; truncation detectable) | **Partial.** The log is hash-linked and truncation is detectable. Its append error is discarded at step 12, so an audit outage never denies. Witness-cosigned checkpoints are roadmap (§14). |
+| P7 | Offline Verifiability | Self-contained chains + cached revocation | HOLDS for MEDIUM/LOW/ANALYTICS only; HIGH requires online revocation | Holds as stated. |
+| P8 | Scope Containment | Existential authorization + P2; no union operation; multi-proof prohibited | SOUND-BY-CONSTRUCTION | **Holds.** Branching is rejected outright. |
+| P9 | Session Security | — | — | **Not applicable.** Sessions are roadmap (§12). |
+| P10 | Minimal Disclosure | Pairwise DIDs, hash-only audit parameters | ARGUED | **Partial.** Audit parameters are hashed. Delegation Gateway is roadmap. |
+
+**Not a property, but the largest gap:** the control plane authenticates callers and does not
+authorize them. Any valid API key can revoke as the platform authority, verify as any agent
+whose custodial key the daemon holds, and enumerate the store. See SECURITY_AUDIT.md F17.
 
 ---
 
@@ -200,7 +247,7 @@ RESTATE (the v0.2 compatibility form: a child UCAN with restated `att` ⊆ paren
 Not applicable. One mode, no mixing rule.
 
 ### 8.5 Issuance registration
-Online issuance (issuer has registry/ATL connectivity) SHOULD register at issuance: atomic write of the credential CID plus the `chain_contains_cid` array. Offline issuance is permitted; the chain becomes registered at first use (step 11, Section 11). **Cascade completeness invariant:** no chain is authorized at HIGH or MEDIUM before all of its hops carry registration evidence (Section 13.6). This replaces the v0.2 atomicity rule, which either centralized all issuance or silently broke cascade completeness for offline-minted chains.
+Online issuance (issuer has registry/ATL connectivity) SHOULD register at issuance: atomic write of the credential CID plus the `chain_contains_cid` array. Offline issuance is permitted; the chain becomes registered at first use (step 11, Section 11). **Cascade completeness invariant (specified; enforced at HIGH only in this build, against a local index — see Section 11 step 11):** no chain is authorized at HIGH or MEDIUM before all of its hops carry registration evidence (Section 13.6). Note that cascade completeness on the *verification* path does not depend on this invariant at all: it derives from the mandatory root-walk of step 1 plus the subject set of step 6. This replaces the v0.2 atomicity rule, which either centralized all issuance or silently broke cascade completeness for offline-minted chains.
 
 ### 8.6 Self-delegation
 `iss == aud` is permitted only with a `dl` decrement and at least one caveat; otherwise REJECT (cycle and verification-budget hygiene; CID-distinct self-loops add no authority).
@@ -248,45 +295,27 @@ The differential it defended against is now handled where it actually arises, by
 
 ## 11. Verification Algorithm (13 Steps)
 
-0. **Structural:** `typ`/`alg`/`ucv` acceptable; `exp` present everywhere; size limits (7.9); SD-3 parse with duplicate-key rejection.
-1. **Chain build:** walk `prf`, resolve CIDs (10.2), seen-CID cycle detection, depth ≤ policy, total capabilities + caveats ≤ 1,000, mode-mixing legality (8.4).
-2. **Linkage:** `hop.iss == parent.aud`; `exp` non-increasing; `nbf` non-decreasing; `dl` strictly decreasing where present.
-3. **Root trust anchor:** root `iss` ∈ trusted_root_dids ∪ bundle-derived platforms (preliminary).
-4. **Signatures:** every hop per SD-2/SD-4/SD-6; algorithm ≥ per-role minimum (Section 6); no anchor downgrade.
-5. **Temporal:** now ∈ [nbf − 60, exp + 60] for all hops; invocation `iat` within 60 s.
-6. **Revocation:** latest-sequence status per subject (13.3); staleness within tier bound (HIGH: online); REVOKED / COMPROMISED / CASCADE / DECOMMISSIONED ⇒ DENY; SUSPENDED ⇒ DENY (resumable).
-7. **Attenuation integrity:** structural. Only the root carries a capability set, so no hop can widen one; the binding invariants are the scalar checks of steps 0–2. This step has no remaining work and is retained for step-number stability.
-8. **Authorization:** action/resource matched against root `att` (existential); then every constraint and caveat on the path evaluated against the invocation context, including `run.parameters`; budget counters consulted and updated as part of the allow transaction (7.6).
-9. **Cross-org:** every did:web issuer ∈ ORG_TRUST `platforms`; chain depth ≤ ORG_TRUST `max_delegation_depth`; requested scope within ORG_TRUST capabilities; trust document fresh ≤ 5 min (no stale fallback); org root key pin match (15.1).
-10. **Proof-of-possession:** invocation signature under leaf `aud` key; `aud` == verifier; nonce unseen (10.5); channel binding (10.3/10.4); obo dual-chain (10.1).
-11. **First-use registration:** any hop lacking registration evidence (ATL inclusion proof or SRT, 14.3): HIGH/MEDIUM — submit the chain and obtain a Signed Registration Timestamp before ALLOW; LOW/ANALYTICS — submit asynchronously and ALLOW.
-12. **Audit:** HIGH — durable enqueue before ALLOW (crash-safe); other tiers asynchronous. Entries hash-linked; checkpoints cosigned into the ATL (Section 14).
+**Nine of the thirteen steps can deny a request in this implementation.** The list below is
+the specified algorithm; each step is annotated with what `adtpd` actually does, because
+quoting "13 steps" without that annotation overstates the pipeline.
 
-**Performance budgets:** warm-cache depth ≤ 5: ≤ 2 ms. With online revocation: ≤ 10 ms. First-use SRT adds ≤ 1 RTT to the log. Hard ceiling 75 ms ⇒ `ADTP_RETRY`. Cold cross-org paths (DID resolution + trust fetch) are excluded from these budgets and bounded only by the 5-minute trust cache discipline.
+0. **Structural:** `typ`/`alg`/`ucv` acceptable; `exp` present everywhere; size limits (7.9); SD-3 parse with duplicate-key rejection; every root capability re-validated against the closed ability set and the canonical-URI profile; a RESTRICT block carrying zero caveats rejected. *(Implemented; can deny.)*
+1. **Chain build:** walk `prf`, resolve CIDs (10.2), seen-CID cycle detection, depth ≤ policy, total capabilities + caveats ≤ 1,000; a non-root element carrying a capability set is rejected. *(Implemented; can deny.)*
+2. **Linkage:** `hop.iss == parent.aud`; `hop.prf == CID(parent)`; `exp` non-increasing; `nbf` non-decreasing; `0 ≤ child.dl < parent.dl`. *(Implemented; can deny.)*
+3. **Root trust anchor:** root `iss` ∈ trusted_root_dids. *(Implemented; can deny. Bundle-derived platforms are roadmap — Appendix A §15.)*
+4. **Signatures:** every hop per SD-2/SD-4/SD-6. *(Implemented; can deny. Per-role algorithm minimums are moot: Ed25519 is the only agent algorithm.)*
+5. **Temporal:** now ∈ [nbf − skew, exp + skew] for all hops; invocation `iat` within its freshness window. *(Implemented; can deny.)*
+6. **Revocation:** latest-sequence status per subject (13.3), over **every element CID and every element audience** on the reconstructed chain; REVOKED / COMPROMISED / CASCADE / DECOMMISSIONED ⇒ DENY; SUSPENDED ⇒ DENY (resumable). *(Implemented; can deny. This is the step the protocol exists for.)*
+7. **Attenuation integrity:** structural. Only the root carries a capability set, so no hop can widen one and the binding invariants are the scalar checks of steps 0–2. *(**No-op by design.** Retained for step-number stability and as the place any future capability-carrying hop would have to be checked — which would reintroduce set-containment comparison and must be argued for explicitly.)*
+8. **Authorization:** action/resource matched against root `att` (existential); then every constraint and caveat on the path evaluated against the invocation context. A wildcard segment in the request resource is rejected (7.2). *(Implemented; can deny. Budget counters are **not** consulted — see 7.6; budget, max_calls and parameter_schema fail closed for want of a metering backend.)*
+9. **Cross-org:** ORG_TRUST platform membership, depth bound, scope containment, trust-document freshness, root key pin. *(**Returns immediately.** Nothing populates trust policies from configuration, so no chain is ever classified cross-organizational. Roadmap — Appendix A §15.)*
+10. **Proof-of-possession:** invocation signature under leaf `aud` key; `aud` == verifier; nonce unseen (10.5). *(Implemented; can deny. Channel binding is compared when configured but no TLS exporter supplies it. `obo` dual-chain is **not** implemented and invocations carrying `obo` are rejected outright. If `verify.allow_custodial_invocation` is enabled, the daemon may sign the invocation itself with the leaf's custodial key and then verify its own signature, which proves nothing about the caller; that setting defaults to off.)*
+11. **First-use registration:** any hop lacking registration evidence. *(**Near-vacuous.** On the daemon path the leaf is checked against the store that registered it milliseconds earlier; below HIGH tier it degrade-accepts. ATL inclusion proofs and Signed Registration Timestamps are roadmap — Appendix A §14.)*
+12. **Audit:** entries hash-linked and appended. *(Implemented, but **cannot fail verification** — the append error is discarded, so an audit-log outage never denies. Checkpoint cosigning into a transparency log is roadmap — Appendix A §14.)*
 
----
-
-## 12. ADTP-Session (Data Plane)
-
-Issued after a successful ALLOW at verifier discretion (HIGH: MAY; other tiers: SHOULD on request):
-
-```
-{ "typ": "adtp/sess/1",
-  "kid": <key id>,
-  "chain": <CID(leaf)>,
-  "aud": <verifier DID>,
-  "scope_hash": SHA-256(JCS(authorized scope)),
-  "iat": <epoch>,
-  "exp": min(leaf.exp, iat + staleness(tier)),
-  "cb_required": <bool>,
-  "sig": <verifier signature> }
-```
-
-plus an out-of-band 256-bit session key (HKDF from the TLS exporter on TLS transports; server-generated for stdio).
-
-**Per request:** HMAC-SHA-256 over `(kid, seq, ts, method, resource, SHA-256(JCS(parameters)))`; strictly monotone `seq`; `ts` within ±5 s. Cost: single-digit microseconds.
-
-**Properties:** a session never extends authority (`scope_hash` pins it). Revocation latency ≤ the tier staleness bound *by construction*, because session lifetime and revocation staleness are the same budget. Budget caveats continue to be metered per request; exhaustion terminates the session (`ADTP_DENIED`). Full Section 11 is the control plane; sessions are the data plane for sub-millisecond and high-frequency agent interaction.
+**Performance budgets** in earlier revisions of this section assumed the transparency log and
+cross-org paths that Appendix A defers. They have not been re-measured against this build and
+are withdrawn rather than restated.
 
 ---
 
@@ -323,7 +352,7 @@ Highest `seq` per subject wins. REINSTATED is valid only after SUSPENDED and onl
 CDN-cached signed log plus emergency channel (≤ 30 s propagation target) for COMPROMISED and identity-scope entries. Staleness bounds: HIGH 0 (online) / MEDIUM 5 min / LOW 15 min / ANALYTICS 60 min.
 
 ### 13.5 Scaling
-v1.0 replaces the flat list with filter cascades (CRLite-style) computed from the ATL-enumerated universe of registered credentials — zero false positives by construction. Sharded per root issuer. Per-issuer entry-rate and filter-size governance: an issuer inflating its shard via mass self-revocation degrades only its own shard (Filter Poisoning control).
+*(Roadmap, Appendix A §14.)* v1.0 would replace the flat list with filter cascades (CRLite-style) computed from the ATL-enumerated universe of registered credentials — zero false positives by construction. Sharded per root issuer. Per-issuer entry-rate and filter-size governance: an issuer inflating its shard via mass self-revocation degrades only its own shard (Filter Poisoning control).
 
 ### 13.6 Cascade
 COMPROMISED / identity scope ⇒ explicit cascade: query `chain_contains_cid` (GIN-indexed, sourced from registration records) ⇒ batch CASCADE entries ⇒ emergency-channel push. **Completeness:** by the step-11 invariant, every chain ever authorized at HIGH or MEDIUM is registered, hence enumerable, hence cascaded. LOW/ANALYTICS chains may lag by at most their staleness bound plus asynchronous registration lag — a stated residual, not a silent gap. SUSPENDED remains implicit (chain walk at next check).
@@ -333,7 +362,124 @@ At least every 24 h: walk registrations, verify `chain_contains_cid` integrity, 
 
 ---
 
-## 14. ADTP Transparency Log (ATL)
+## 17. Agent Lifecycle and Sponsor Controls
+
+> **Implemented:** the state machine and its transitions. **Not implemented:** every ATL-logged
+> record named below (registration records, sponsorship transfer, continuity records) — those
+> depend on the transparency log of Appendix A §14. The daemon keeps this state locally.
+
+States: REGISTERED → ACTIVE → { SUSPENDED ⇄ ACTIVE (via REINSTATED), COMPROMISED, EXPIRED } → DECOMMISSIONED.
+
+**Registration record:** `{ agent did, sponsor did, operational scope, activity horizon, tier, signatures }` — sponsor cosignature REQUIRED for HIGH-tier agents — written as an ATL REG entry.
+
+**Sponsor powers:** per 13.1 (unilateral identity revocation), registration cosign, and sponsorship transfer = a CONT-type ATL record dual-signed by old and new sponsor.
+
+**Key rotation = new did:key identity.** All delegations invalidated (strict, by design). For long-lived agents, a **continuity record** `{ "typ": "adtp/cont/1", old_did, new_did, sig_old, sig_sponsor }` ATL-logged binds reputation and audit lineage to the new identity without transferring any credential.
+
+---
+
+## 18. Privacy Considerations
+
+**Disclosure surface:** full chains expose delegation topology, agent DIDs, and sponsor linkage to every verifier; a static did:key is a global correlator.
+
+**Controls:**
+- Pairwise agent DIDs per counterpart organization: RECOMMENDED.
+- **Delegation Gateway pattern:** an org-boundary agent holds the externally visible grant; internal chains terminate at the gateway; the gateway issues fresh single-hop external delegations. Internal topology never leaves the organization while internal audit linkage is preserved.
+- No PII in capability URIs, caveats, or DIDs: MUST.
+- Audit logs store SHA-256(parameters), never parameter values: MUST.
+- ATL minimization per 14.1/14.6; retention bounded by legal duty, parameter hashes only.
+- GDPR note: agent DIDs are plausibly personal data via sponsor identifiability; registry and log operators are controllers for those records.
+- Cryptographic selective disclosure (BBS+-class) is a v2 research item and is explicitly not claimed in v1.x.
+
+---
+
+## 22. Known Limitations
+
+Design limitations of the protocol. Limitations of *this implementation* are in the README
+under Status and in SECURITY_AUDIT.md; the two lists are deliberately separate, because
+conflating "the design does not do this" with "the code does not do this yet" is how a spec
+stops being checkable.
+
+1. **The caveat vocabulary is closed, and grows by version bump.** A restriction nobody
+   anticipated is inexpressible until the vocabulary names it. `action_restrict` was added in
+   v0.2.0 for exactly this reason: read-only delegation could not be expressed. Biscuit's
+   Datalog does not have this limitation, at the cost of a larger trusted computing base.
+   This is an accepted tradeoff, not an oversight — see DESIGN.md.
+2. Cross-verifier shared budgets require a metering service or pre-splitting; there is no
+   global atomic counter without coordination.
+3. Key rotation invalidates all active delegations (strict by design); the continuity record
+   preserves lineage only.
+4. LOW/ANALYTICS cascade lag is bounded but nonzero (13.6).
+5. No cryptographic selective disclosure until v2; privacy in v1.x is architectural.
+6. did:web retains residual DNS/TLS dependence; pinning narrows exposure to first contact and
+   rotation windows.
+7. Channel binding is unavailable on some platforms; tier policy compensates.
+8. **No formal verification.** No property in Section 4 is labeled VERIFIED and none should
+   be read as such. A Tamarin model is an aspiration (Appendix A §23), not work in progress.
+9. Multi-proof / branching chains excluded: authority from several parents would make the
+   chain a DAG and authorization a union across branches, reintroducing the set arithmetic
+   the design exists to avoid. This is a real capability given up.
+10. Caveat predicate expressiveness (ADTP-PS1) is intentionally limited for decidability.
+11. **Revocation completeness is a property of the verification path only.** Published
+    revocation state (`/v1/status/{cid}`, the signed list) is incomplete for every status
+    except `COMPROMISED`. A consumer that trusts the published list instead of verifying gets
+    a wrong answer.
+
+---
+
+# Appendix A — Roadmap (not implemented)
+
+**Nothing in this appendix is built.** These sections were written as design intent before
+implementation and are retained for that reason alone. Do not read any of them as a
+description of `adtpd`, and do not cite them as capabilities of this project.
+
+Section numbers are those of the pre-segregation revision and are therefore non-contiguous.
+
+## A.0 Honest positioning of this appendix
+
+The four largest items here — a transparency log, session credentials, organizational
+federation, and transport bindings — are all deferred. That is worth stating next to the
+relevant comparison rather than leaving a reader to discover it.
+
+**AIP** (Agent Interaction Protocol, [arXiv 2603.24775](https://arxiv.org/abs/2603.24775), now
+[draft-prakash-aip-00](https://datatracker.ietf.org/doc/draft-prakash-aip/)) ships the same
+restriction-only attenuation model as this protocol, and **ships transport bindings for MCP,
+A2A and HTTP** — Section 16 below, which this project has specified and not built. On
+transports, AIP is ahead. On attenuation, the two designs arrive at the same place, and any
+claim of novelty there does not survive contact with the prior art listed in Section 1.
+
+The axis on which the designs genuinely differ is revocation: **AIP explicitly defers
+revocation to a future version**, and transitive denial via a mandatory root-walk is what this
+protocol has and that specification does not. That is the comparison worth making, and it is
+the only one this project should lead with.
+
+---
+
+## [ROADMAP] 12. ADTP-Session (Data Plane)
+
+Issued after a successful ALLOW at verifier discretion (HIGH: MAY; other tiers: SHOULD on request):
+
+```
+{ "typ": "adtp/sess/1",
+  "kid": <key id>,
+  "chain": <CID(leaf)>,
+  "aud": <verifier DID>,
+  "scope_hash": SHA-256(JCS(authorized scope)),
+  "iat": <epoch>,
+  "exp": min(leaf.exp, iat + staleness(tier)),
+  "cb_required": <bool>,
+  "sig": <verifier signature> }
+```
+
+plus an out-of-band 256-bit session key (HKDF from the TLS exporter on TLS transports; server-generated for stdio).
+
+**Per request:** HMAC-SHA-256 over `(kid, seq, ts, method, resource, SHA-256(JCS(parameters)))`; strictly monotone `seq`; `ts` within ±5 s. Cost: single-digit microseconds.
+
+**Properties:** a session never extends authority (`scope_hash` pins it). Revocation latency ≤ the tier staleness bound *by construction*, because session lifetime and revocation staleness are the same budget. Budget caveats continue to be metered per request; exhaustion terminates the session (`ADTP_DENIED`). Full Section 11 is the control plane; sessions are the data plane for sub-millisecond and high-frequency agent interaction.
+
+---
+
+## [ROADMAP] 14. ADTP Transparency Log (ATL)
 
 ### 14.1 Structure
 RFC 6962/9162-style append-only Merkle log (SHA-256). Entry types: **REG** (credential registration: CID, chain CIDs, issuer DID, tier), **REV** (revocation entries), **CKPT** (verifier audit checkpoints), **TRUST** (ORG_TRUST documents and bundles), **CONT** (identity continuity records). Data minimization: CIDs, DIDs, and minimal metadata only — never parameters or payloads. Where useful, ATL profiles SCITT rather than inventing log semantics.
@@ -355,7 +501,7 @@ Rate-limited registration per issuer. No public enumeration API for agent→spon
 
 ---
 
-## 15. Cross-Org Trust
+## [ROADMAP] 15. Cross-Org Trust
 
 ### 15.1 Org identity = locator + pinned authority
 did:web is the **locator**; the pinned root key set is the **authority**. ORG_TRUST MUST include `root_keys` (multibase). Verifiers match the resolved `https://{domain}/.well-known/did.json` document against the pin; mismatch ⇒ DENY plus alert. No TOFU. Domain capture (registrar hijack, expiry, seizure) therefore cannot silently swap org keys.
@@ -390,7 +536,7 @@ DNSSEC SHOULD; Certificate Transparency (≥ 2 logs) SHOULD; multi-resolution (�
 
 ---
 
-## 16. Transport Bindings
+## [ROADMAP] 16. Transport Bindings
 
 **Body limit:** The daemon enforces a 64 KB maximum request body on all endpoints. Payloads exceeding this limit receive HTTP 413.
 
@@ -421,34 +567,7 @@ Receipt aggregation and shared-budget counters across verifiers. The protocol de
 
 ---
 
-## 17. Agent Lifecycle and Sponsor Controls
-
-States: REGISTERED → ACTIVE → { SUSPENDED ⇄ ACTIVE (via REINSTATED), COMPROMISED, EXPIRED } → DECOMMISSIONED.
-
-**Registration record:** `{ agent did, sponsor did, operational scope, activity horizon, tier, signatures }` — sponsor cosignature REQUIRED for HIGH-tier agents — written as an ATL REG entry.
-
-**Sponsor powers:** per 13.1 (unilateral identity revocation), registration cosign, and sponsorship transfer = a CONT-type ATL record dual-signed by old and new sponsor.
-
-**Key rotation = new did:key identity.** All delegations invalidated (strict, by design). For long-lived agents, a **continuity record** `{ "typ": "adtp/cont/1", old_did, new_did, sig_old, sig_sponsor }` ATL-logged binds reputation and audit lineage to the new identity without transferring any credential.
-
----
-
-## 18. Privacy Considerations
-
-**Disclosure surface:** full chains expose delegation topology, agent DIDs, and sponsor linkage to every verifier; a static did:key is a global correlator.
-
-**Controls:**
-- Pairwise agent DIDs per counterpart organization: RECOMMENDED.
-- **Delegation Gateway pattern:** an org-boundary agent holds the externally visible grant; internal chains terminate at the gateway; the gateway issues fresh single-hop external delegations. Internal topology never leaves the organization while internal audit linkage is preserved.
-- No PII in capability URIs, caveats, or DIDs: MUST.
-- Audit logs store SHA-256(parameters), never parameter values: MUST.
-- ATL minimization per 14.1/14.6; retention bounded by legal duty, parameter hashes only.
-- GDPR note: agent DIDs are plausibly personal data via sponsor identifiability; registry and log operators are controllers for those records.
-- Cryptographic selective disclosure (BBS+-class) is a v2 research item and is explicitly not claimed in v1.x.
-
----
-
-## 19. Post-Quantum Migration
+## [ROADMAP] 19. Post-Quantum Migration
 
 Signatures require contemporaneous unforgeability, not confidentiality; the exposure ordering is therefore anchor-first.
 
@@ -460,24 +579,41 @@ Signatures require contemporaneous unforgeability, not confidentiality; the expo
 
 ---
 
-## 20. Competitive Position
+## [ROADMAP] 20. Competitive Position
 
-| Feature | ADTP v0.3 | AIP | AITH |
-|---|---|---|---|
-| Delegation integrity | Structural (RESTRICT monotone); DEPENDENT compat mode, sunset v1.0 | Spec-enforced / Datalog | Tamarin-verified |
-| Formal verification | Tamarin model scoped (Section 23), pending | None | Done |
-| Revocation | Authority model + provably complete cascade + CRLite path | Not specified | Unknown |
-| Cross-org trust | Bilateral, pinned roots, bundles, jurisdiction tags | None | Unknown |
-| High-frequency path | Sessions (data plane) | None | Unknown |
-| Metered authority | Budgets, receipts, pre-splitting | None | Unknown |
-| Transparency / audit | Witness-cosigned ATL | None | Unknown |
-| Transports | MCP HTTP + stdio, A2A, HTTPS, channel binding | MCP, A2A, HTTP (no binding) | Unknown |
+The table in earlier revisions of this section was written from design intent, scored this
+protocol against features it had not built, and marked competitor rows "None" or "Unknown"
+without citation. It is withdrawn. What replaces it is narrower and checkable.
 
-Competitor rows MUST be re-verified against current drafts before any external use of this table.
+**Where this project is behind.** AIP ([arXiv 2603.24775](https://arxiv.org/abs/2603.24775),
+[draft-prakash-aip-00](https://datatracker.ietf.org/doc/draft-prakash-aip/)) ships transport
+bindings for MCP, A2A and HTTP. This project specifies them in §16 and has built none. AIP is
+also in the IETF process; this is not.
+
+**Where the designs are equivalent.** Restriction-only attenuation. AIP ships the same model,
+and it is prior art in any case — macaroons (NDSS 2014), Biscuit v2/v3, UCAN 1.0's `cmd`+`pol`,
+and the object-capability caretaker pattern all express it. No novelty claim on this axis
+survives examination, and none is made.
+
+**Where this project is ahead, and it is one thing.** AIP defers revocation to a future
+version. This protocol makes transitive denial structural: the verifier cannot compute
+authority without reconstructing the chain to its root, so every ancestor's revocation state is
+checked on every verification, and revoking any ancestor denies the whole subtree without
+enumerating descendants. UCAN's own revocation specification declines to guarantee this.
+
+**Biscuit deserves a precise comparison rather than a table cell.** A Biscuit token carries its
+ancestor blocks inline and each block has a revocation identifier, so revoking a parent block
+denies every attenuated descendant carrying it — subtree denial is achievable there. The
+difference is that here the ancestor walk is structurally unavoidable, whereas a Biscuit
+verifier already holds every block and must be *configured* to check their revocation
+identifiers. That is a real difference in failure mode, not a difference in capability, and it
+should not be overstated.
+
+Any comparison in this section MUST be re-verified against current drafts before external use.
 
 ---
 
-## 21. Conformance Profiles
+## [ROADMAP] 21. Conformance Profiles
 
 | Profile | Requirements |
 |---|---|
@@ -489,21 +625,7 @@ Competitor rows MUST be re-verified against current drafts before any external u
 
 ---
 
-## 22. Known Limitations
-
-2. Cross-verifier shared budgets require a metering service or pre-splitting; there is no global atomic counter without coordination.
-3. Key rotation invalidates all active delegations (strict by design); the continuity record preserves lineage only.
-4. LOW/ANALYTICS cascade lag is bounded but nonzero (13.6).
-5. No cryptographic selective disclosure until v2; privacy in v1.x is architectural (pairwise DIDs, gateways).
-6. did:web retains residual DNS/TLS dependence; pinning narrows exposure to first contact and rotation windows.
-7. Channel binding is unavailable on some platforms; tier policy compensates.
-8. Tamarin verification pending (Section 23); no property is labeled VERIFIED until then.
-9. Multi-proof / branching chains excluded in v1.x.
-10. Caveat predicate expressiveness (ADTP-PS1) is intentionally limited for decidability.
-
----
-
-## 23. v1.0 Exit Criteria
+## [ROADMAP] 23. v1.0 Exit Criteria
 
 1. **Tamarin model** covering: chain acceptance (no non-delegated action is authorized in RESTRICT mode), proof-of-possession replay resistance including cache restart, and the revocation propagation bound — proof or falsification, published.
 2. **Two independent interoperating implementations** (Go + TypeScript) passing a conformance vector suite that includes URI-canonicalization and parser-differential corpora.

@@ -31,6 +31,11 @@ consequence of the chain being walkable and the walk being mandatory.
 
 ## Why UCAN, and not macaroons, biscuits, or scoped JWTs
 
+*The README's [Prior art](README.md#prior-art) section is a summary of this one. This is the
+long form, and it is the honest version: restriction-only attenuation is prior art, this
+project arrived at it independently, and the alternatives below were rejected on grounds that
+have nothing to do with the attenuation model.*
+
 **Scoped JWTs — rejected because there is no chain.** A JWT with `scope: "read:files"` names
 no parent. When an agent delegates, it either hands over the same token or gets a new one
 minted by the issuer, and in neither case does the resulting token record that a delegation
@@ -66,6 +71,22 @@ the goal had been expressive authorization policy rather than bounded revocable 
 Biscuit would be the right answer. It is worth saying plainly that a RESTRICT block is
 close to "a Biscuit block with a closed caveat vocabulary instead of Datalog," and that the
 closed vocabulary is the entire delta.
+
+**The caretaker pattern — the oldest form of the same idea.** In the object-capability
+literature, you delegate by handing out a revocable forwarder rather than the authority
+itself; revoking the forwarder cuts off everyone downstream of it. That is structurally what a
+delegation chain with a mandatory root-walk does, several decades earlier and without the
+cryptography. Anyone who reaches for "revoke the intermediary, kill the subtree" as though it
+were new should read the ocap literature first.
+
+**AIP — concurrent, not prior, and ahead on transports.** The Agent Interaction Protocol
+([arXiv 2603.24775](https://arxiv.org/abs/2603.24775), now
+[draft-prakash-aip-00](https://datatracker.ietf.org/doc/draft-prakash-aip/)) ships the same
+restriction-only attenuation model and ships MCP/A2A/HTTP transport bindings that this project
+has specified and not built. It defers revocation to a future version. That single difference
+is the entire defensible distinction between the two designs, and it is the one this project
+should be judged on — not attenuation, where both arrive at the same place that macaroons
+reached in 2014.
 
 **UCAN — chosen for `prf`.** Not for its attenuation story, which ADTP largely does not use.
 UCAN's `prf` field is an explicit, content-addressed pointer from child to parent, and that
