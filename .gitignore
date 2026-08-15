@@ -40,3 +40,8 @@ Thumbs.db
 .env
 .env.*
 *.local
+# Local session notes, not for the public repo
+/HANDOFF.md
+
+# Claude Code local settings
+.claude/
