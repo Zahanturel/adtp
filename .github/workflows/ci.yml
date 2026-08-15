@@ -7,6 +7,16 @@ on:
   # request opens, whatever it targets. Restricting this to main leaves branch
   # work uncovered until branch protection forces pull requests.
   pull_request:
+  # Weekly, Tuesday 04:00 UTC. This exists for the vulncheck job: standard
+  # library advisories are published against a Go version already pinned in
+  # go.mod, so they appear without anything in this repository changing. Five
+  # such advisories landed between 2026-08-05 and 2026-08-15 and were caught
+  # only because a release happened to be pushed. On a quiet repository that
+  # is an unbounded window. The other jobs run too, which also catches
+  # toolchain and dependency drift.
+  schedule:
+    - cron: '0 4 * * 2'
+  workflow_dispatch:
 
 permissions:
   contents: read
