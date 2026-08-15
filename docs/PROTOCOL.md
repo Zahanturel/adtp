@@ -30,9 +30,10 @@ A cryptographic protocol for AI agent identity, delegation, and credential lifec
 
 **What it is for.** Producing a non-repudiable, per-hop, issuer-signed, hash-linked record of
 which agent authorized which sub-agent to do what, such that revoking any element of that
-record denies the entire subtree beneath it at verification time, without enumerating
-descendants. Transitive denial is the property this protocol is organized around; everything
-else serves it.
+record denies that chain and every chain descending from it at verification time, without
+enumerating descendants. Per-credential transitive denial is the property this protocol is
+organized around; everything else serves it. It is not confinement, and does not guarantee
+that a revoked agent loses a capability held by a separate credential — see §20.
 
 **Architecture (implemented).** UCAN-compatible JWT root credentials rooted in did:key,
 Ed25519 only. One attenuation mode: RESTRICT — monotone caveat blocks, with no
@@ -595,11 +596,23 @@ and it is prior art in any case — macaroons (NDSS 2014), Biscuit v2/v3, UCAN 1
 and the object-capability caretaker pattern all express it. No novelty claim on this axis
 survives examination, and none is made.
 
-**Where this project is ahead, and it is one thing.** AIP defers revocation to a future
-version. This protocol makes transitive denial structural: the verifier cannot compute
-authority without reconstructing the chain to its root, so every ancestor's revocation state is
-checked on every verification, and revoking any ancestor denies the whole subtree without
-enumerating descendants. UCAN's own revocation specification declines to guarantee this.
+**Where this project is ahead, and it is one thing, stated narrowly.** AIP defers revocation
+to a future version. This protocol makes per-credential transitive denial structural: the
+verifier cannot compute authority without reconstructing the chain to its root, so every
+ancestor's revocation state is checked on every verification, and revoking any element denies
+that chain and every chain descending from it, without enumerating descendants.
+
+**What this is not.** The [UCAN Revocation spec](https://ucan.xyz/revocation/) states that
+"revocation of a particular proof does not guarantee that the Agent can no longer access to
+the capability in question," because the agent may hold a second unrevoked chain. That is
+equally true here: rejecting branching (§8) means one credential has one path to one root, not
+that one agent holds one credential. The delta against UCAN is narrower still — UCAN permits a
+single credential to derive authority from several parents, so revoking one ancestor may leave
+it alive by another path, and this protocol forbids that by forbidding multi-parent delegation.
+A capability given up for a guarantee, not a free win.
+
+Closing the gap properly requires confinement, which the UCAN spec correctly notes is
+unavailable because it would require every process to be online.
 
 **Biscuit deserves a precise comparison rather than a table cell.** A Biscuit token carries its
 ancestor blocks inline and each block has a revocation identifier, so revoking a parent block

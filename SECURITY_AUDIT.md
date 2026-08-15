@@ -13,7 +13,7 @@ Nothing here is softened. Several findings remain open.
 
 | | Count |
 |---|---|
-| Findings resolved | 8 |
+| Findings resolved | 9 |
 | Findings open | 9 |
 | Findings withdrawn as incorrect | 2 |
 | Claims verified | 4 (1 confirmed, 2 partial, 1 **withdrawn — this audit got it wrong**) |
@@ -72,7 +72,13 @@ ancestor is always checked. This does not depend on the registration index, on e
 or on a transparency log.
 
 The claim was publicly attributed to a "registration invariant." That attribution was wrong
-— the operative mechanism is the chain walk. The documentation has been corrected.
+— the operative mechanism is the chain walk. The documentation has been corrected. This is
+instance 1 of the pattern recorded as F20.
+
+**A further limit, added after reading the UCAN Revocation spec.** Even with the chain walk,
+this does not guarantee that a revoked *agent* loses a capability: the guarantee is
+per-credential. An agent holding a second credential over the same resource keeps it. See
+F20 instance 3.
 
 Four qualifications, all still true:
 
@@ -131,6 +137,8 @@ rather than observations:
   it found two more and is recorded as F16.**
 - No future entry in this document may cite issuance-time validation as evidence about
   verification-time behaviour without naming the verification-side line that enforces it.
+  See also F20, which generalises this: the same "plausible explanation accepted without
+  checking the alternative" error has now produced three wrong public claims.
 
 Two narrower lessons, both applying beyond this finding:
 
@@ -197,6 +205,37 @@ by re-encoding it once inline chain presentation ships. Not reachable today, bec
 block the daemon resolves comes from its own store under a CID it verified.
 *Resolved:* `ParseRestrictBlock` now compares the received bytes to the canonical
 re-serialization and rejects on any difference.
+
+**F20 — "Right outcome, wrong mechanism" is this project's characteristic documentation
+failure, and it has now happened three times.** *(Method finding, not a vulnerability.)*
+
+Three separate claims have been made in this repository's public documentation that described
+a real behaviour and attributed it to the wrong cause:
+
+1. **Cascade completeness was attributed to "a registration invariant."** The operative
+   mechanism is the mandatory chain walk (claim 2 above). Corrected in the previous revision.
+2. **RESTRICT was described as making "the attack surface absent."** Comparison moved rather
+   than vanished, and the actual exploitable defect (F14) involved no comparison code at all.
+   Corrected in v0.2.0.
+3. **Transitive denial was claimed as closing a gap the UCAN Revocation spec leaves open.** The
+   quoted sentence — "revocation of a particular proof does not guarantee that the Agent can no
+   longer access to the capability in question" — is *equally true of this implementation*.
+   Rejecting branching gives one **credential** one path to one root; it does not give one
+   **agent** one credential. An agent holding two credentials over the same resource keeps the
+   second when an ancestor of the first is revoked. The real guarantee is per-credential
+   subtree denial, and the delta against UCAN is only that UCAN permits a single credential to
+   derive authority from several parents. Corrected in this revision.
+
+The shape is identical every time: a mechanism is observed to work, a plausible explanation is
+attached without being checked against the alternative, and the explanation is stated with more
+confidence than the observation supports. Instance 3 is the worst of the three, because the
+claim was also repeated to a standards working group before it was checked.
+
+The operational rule, alongside F19's: **a claim about *why* something works must name the code
+path that makes it work, and must state what would have to be true for a competing explanation
+to be the real one.** Where a claim compares this project to another system, the other system's
+specification must be read and quoted rather than characterised from memory — which is how
+instance 3 survived as long as it did.
 
 **F19 — A test that passes against unfixed code has told you nothing.** *(Method finding, not
 a vulnerability. Recorded because it changed the outcome of F18.)*

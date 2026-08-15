@@ -6,10 +6,13 @@
 
 ADTP is a protocol and Go daemon that produces a **non-repudiable, per-hop, issuer-signed,
 hash-linked record of which agent authorized which sub-agent to do what** — and where
-revoking any link in that record denies the entire subtree beneath it, at verification time,
-without enumerating descendants.
+revoking any link in that record denies that chain and every chain descending from it, at
+verification time, without enumerating descendants.
 
-That is the contribution. Everything else here is in service of it.
+That is the contribution, and everything else here is in service of it. It is a
+*per-credential* guarantee — not a guarantee that a revoked agent loses a capability it also
+holds by some other credential, which no offline-capable protocol provides. See
+[What this actually provides](#what-this-actually-provides) for where the line falls.
 
 ## The problem
 
@@ -63,10 +66,25 @@ the verifier learns what the leaf is authorized to do at all. A revoked ancestor
 therefore always in the set being checked. This does not depend on enumerating descendants,
 on a registration index, or on a transparency log.
 
-That is the gap UCAN's own revocation specification declines to close: it states that
-revoking a proof does not guarantee the agent can no longer access the capability, because a
-UCAN verifier is not obliged to reconstruct and re-check the proof chain on every
-invocation. Here it is obliged, because it cannot compute authority any other way.
+**Be precise about what this is not.** The [UCAN Revocation
+spec](https://ucan.xyz/revocation/) states that "revocation of a particular proof does not
+guarantee that the Agent can no longer access to the capability in question," because the
+agent may hold a second, unrevoked chain to the same capability. **That sentence is equally
+true here, and an earlier version of this README wrongly claimed otherwise.** Forbidding
+branching means one *credential* has one path to one root. It does not mean one *agent* holds
+one credential. An agent with two credentials over the same resource keeps the second when
+you revoke an ancestor of the first.
+
+The guarantee is therefore per-credential, and stating it any wider is an overclaim: revoking
+any element of a chain denies that chain and every chain descending from it. What UCAN allows
+and this does not is a *single* credential deriving authority from several parents, so that
+revoking one ancestor may leave the credential alive by another path. That difference is
+bought by rejecting multi-parent delegation outright — a real capability given up, discussed
+in [DESIGN.md](DESIGN.md).
+
+Closing the gap properly would require confinement, and the UCAN spec is right that this is
+not available: it would require every process to be online, which defeats the offline-capable
+design both protocols want.
 
 **Where that leaves the limits.** Verification is complete; the *published* revocation state
 is not. The difference is documented under "Four qualifications on revocation" below, with a
