@@ -21,6 +21,24 @@ Nothing here is softened. Several findings remain open.
 
 ## The four core claims
 
+> **Update, v0.2.0.** RESTATE is removed from the protocol and the implementation, which
+> resolves the RESTATE half of claims 1 and 2 by deleting the thing that was PARTIAL rather
+> than by fixing it. `CapabilityLeq`, `constraintLeq`, `att_seal`, `checkModeMixing`, step
+> 7's RESTATE branch, and the `mode` parameter on the delegations API are gone; a non-root
+> element carrying a capability set is rejected at chain build. The verdicts below are left
+> as written, because they were true of the code they were written against and because the
+> reason RESTATE existed at all — compatibility with a version that had no implementations —
+> is worth leaving legible.
+>
+> The correct post-removal claim is **"chain validation performs no set-containment
+> comparison"**, not "the attack surface is absent". Comparison moved rather than vanished:
+> `URICovers` and `CanonicalizeURI` still run at step 8 on every verification, and
+> `evaluateConstraint` still dispatches nine constraint types across eight case arms. What
+> changed is *where a mistake lands* — a per-hop comparison bug widened a credential, whereas
+> an authorization-time bug denies or misroutes one request against a grant the platform
+> signed. That is a real reduction and a smaller blast radius. It is not an absence, and F14
+> is the standing evidence that scalar invariants have their own failure mode.
+
 ### 1. An agent cannot mint a capability broader than one it holds, and attenuation is enforced structurally by the token format rather than by a policy check — **PARTIAL**
 
 **True for RESTRICT.** A RESTRICT block carries no capability set at all

@@ -164,12 +164,13 @@ func (d *testDaemon) issueCredential(t *testing.T, agentDID string, caps []map[s
 	return resp.CID, resp.Token
 }
 
-func (d *testDaemon) delegate(t *testing.T, parentCID, audienceDID, mode string, depthLeft int, caveats []map[string]any) (int, string) {
+// delegate issues a RESTRICT hop. There is no mode parameter: RESTATE was
+// removed, so adding caveats is the only delegation the API can express.
+func (d *testDaemon) delegate(t *testing.T, parentCID, audienceDID string, depthLeft int, caveats []map[string]any) (int, string) {
 	t.Helper()
 	body := map[string]any{
 		"parent_cid":   parentCID,
 		"audience_did": audienceDID,
-		"mode":         mode,
 		"depth_left":   depthLeft,
 	}
 	if caveats != nil {

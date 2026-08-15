@@ -80,7 +80,7 @@ func TestStress_ConcurrentVerifyAfterRevoke(t *testing.T) {
 	}, 3600)
 
 	now := time.Now().Unix()
-	_, delegatedCID := d.delegate(t, rootCID, agentB, "restrict", 4, []map[string]any{
+	_, delegatedCID := d.delegate(t, rootCID, agentB, 4, []map[string]any{
 		timeWindowCaveat(now-60, now+3600),
 	})
 

@@ -36,14 +36,16 @@ type IssueCredentialRequest struct {
 }
 
 // DelegateRequest delegates from a parent credential to an audience.
+//
+// There is one delegation mode. A hop adds caveats to its parent and never
+// restates a capability set, so there is no "mode" field and no way to ask for
+// one: the only thing a delegator can express is a further restriction.
 type DelegateRequest struct {
-	ParentCID    string       `json:"parent_cid"`
-	AudienceDID  string       `json:"audience_did"`
-	Mode         string       `json:"mode"` // "restrict" or "restate"
-	Caveats      Caveats      `json:"caveats,omitempty"`
-	Capabilities []Capability `json:"capabilities,omitempty"`
-	DepthLeft    int          `json:"depth_left"`
-	ExpSeconds   int64        `json:"exp_seconds"`
+	ParentCID   string  `json:"parent_cid"`
+	AudienceDID string  `json:"audience_did"`
+	Caveats     Caveats `json:"caveats,omitempty"`
+	DepthLeft   int     `json:"depth_left"`
+	ExpSeconds  int64   `json:"exp_seconds"`
 }
 
 // VerifyRequest verifies a delegation chain against an action on a resource. If

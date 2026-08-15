@@ -40,7 +40,7 @@ START=$((NOW - 60))
 END=$((NOW + 1800))
 echo "5. Delegate to sub-agent (RESTRICT mode, 30min window)"
 DEL_CID=$(auth -X POST "$BASE/v1/delegations" \
-  -d "{\"parent_cid\":\"$ROOT_CID\",\"audience_did\":\"$AGENT_B\",\"mode\":\"restrict\",\"depth_left\":2,\"caveats\":[{\"type\":\"resource_restrict\",\"resource\":\"tool://search/web\"},{\"type\":\"time_window\",\"start\":$START,\"end\":$END}]}" \
+  -d "{\"parent_cid\":\"$ROOT_CID\",\"audience_did\":\"$AGENT_B\",\"depth_left\":2,\"caveats\":[{\"type\":\"resource_restrict\",\"resource\":\"tool://search/web\"},{\"type\":\"time_window\",\"start\":$START,\"end\":$END}]}" \
   | jq -r .cid)
 echo "   CID: ${DEL_CID:0:50}..."
 echo ""

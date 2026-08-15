@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Package verify implements the ADTP 13-step verification algorithm
-// (specification Section 11), proof-of-possession (Section 10), and the
-// RESTATE-mode attenuation checks layered on the credential primitives.
+// (specification Section 11), proof-of-possession (Section 10), and the caveat
+// evaluation layered on the credential primitives.
 package verify
 
 import "fmt"

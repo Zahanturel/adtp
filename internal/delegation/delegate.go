@@ -14,7 +14,6 @@ import (
 var (
 	ErrCannotDelegate = errors.New("credential does not authorize delegation")
 	ErrDepthExhausted = errors.New("delegation depth is exhausted")
-	ErrEscalation     = errors.New("restated capabilities are not covered by the parent")
 )
 
 // ParentFromUCAN derives the delegation context from a UCAN. The delegable
@@ -74,18 +73,4 @@ func DelegateRestrict(parent credential.DelegationParent, audDID string, caveats
 		return nil, "", err
 	}
 	return block, store.Put(raw), nil
-}
-
-// DelegateRestate issues a RESTATE delegation: it verifies that attSubset is
-// covered by the parent's capabilities (rejecting escalation at issuance), mints
-// the child hop with its att_seal, stores it, and returns the token and its CID.
-func DelegateRestate(parent *credential.UCAN, audDID string, attSubset []credential.Capability, signerKey ed25519.PrivateKey, store *MemoryProofStore) (string, string, error) {
-	if !credential.CapabilitiesSubset(attSubset, parent.Payload.Att) {
-		return "", "", fmt.Errorf("adtp/delegation: %w", ErrEscalation)
-	}
-	token, err := credential.CreateRestateHop(parent, audDID, attSubset, signerKey)
-	if err != nil {
-		return "", "", err
-	}
-	return token, store.Put([]byte(token)), nil
 }

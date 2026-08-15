@@ -161,7 +161,11 @@ func TestVerifyWrongPresenter(t *testing.T) {
 	}
 }
 
-func TestVerifyEscalationRestate(t *testing.T) {
+// RESTATE is gone, and with it the only hop type that carried its own
+// capability set. A chain element below the root that carries one is rejected at
+// chain build rather than compared against its parent -- there is no comparison
+// left in chain validation to do it with.
+func TestVerifyRejectsNonRootToken(t *testing.T) {
 	now := time.Now().Unix()
 	store := delegation.NewMemoryProofStore()
 	platformKey, platformDID := genKey(t)
@@ -169,29 +173,29 @@ func TestVerifyEscalationRestate(t *testing.T) {
 	leafKey, leafDID := genKey(t)
 	_, verifierDID := genKey(t)
 
-	toolCap := vcap(t, credential.CanToolInvoke, "tool://server/*")
 	rootToken, err := credential.CreateUCAN(credential.UCANPayload{
 		Iss: platformDID, Aud: agentDID,
-		Att: []credential.Capability{toolCap},
+		Att: []credential.Capability{vcap(t, credential.CanToolInvoke, "tool://server/*")},
 		Prf: []string{}, Exp: now + 3600, Nbf: now - 60, Iat: now,
 	}, platformKey)
 	if err != nil {
 		t.Fatalf("CreateUCAN: %v", err)
 	}
-	root, err := credential.ParseUCAN(rootToken)
-	if err != nil {
-		t.Fatalf("ParseUCAN: %v", err)
-	}
-	store.Put([]byte(rootToken))
+	rootCID := store.Put([]byte(rootToken))
 
-	// A malicious RESTATE hop restating a capability the root never granted.
-	// CreateRestateHop does not enforce subset; the verifier must reject it.
-	escalated := []credential.Capability{vcap(t, credential.CanResourceWrite, "resource://secret/data")}
-	hopToken, err := credential.CreateRestateHop(root, leafDID, escalated, agentKey)
+	// A token naming the root as its proof: the shape a RESTATE hop had. It is
+	// validly signed by the agent the root delegates to, and it restates a
+	// capability the root does not grant. The escalation is never evaluated --
+	// the element is refused for carrying capabilities at all.
+	hop, err := credential.CreateUCAN(credential.UCANPayload{
+		Iss: agentDID, Aud: leafDID,
+		Att: []credential.Capability{vcap(t, credential.CanResourceWrite, "resource://secret/data")},
+		Prf: []string{rootCID}, Exp: now + 3600, Nbf: now - 60, Iat: now,
+	}, agentKey)
 	if err != nil {
-		t.Fatalf("CreateRestateHop: %v", err)
+		t.Fatalf("CreateUCAN(hop): %v", err)
 	}
-	hopCID := store.Put([]byte(hopToken))
+	hopCID := store.Put([]byte(hop))
 
 	config := &VerifierConfig{
 		VerifierDID:     verifierDID,
@@ -200,14 +204,21 @@ func TestVerifyEscalationRestate(t *testing.T) {
 		ProofStore:      store,
 		NonceCache:      NewMemoryNonceCache(),
 		RevocationCache: revocation.NewMemoryRevocationCache(),
+		NowFn:           func() int64 { return now },
 	}
 	inv, err := CreateInvocation(hopCID, credential.CanResourceWrite, "resource://secret/data", nil, leafKey, verifierDID, "")
 	if err != nil {
 		t.Fatalf("CreateInvocation: %v", err)
 	}
 	res := Verify(context.Background(), nil, inv, config)
-	if res.OK || res.Error.Code != CodeAttenuation {
-		t.Errorf("code = %v, want V008 (OK=%v)", res.Error, res.OK)
+	if res.OK {
+		t.Fatal("FATAL: a non-root token was accepted as a chain element")
+	}
+	if res.Error.Code != CodeChainBroken {
+		t.Errorf("code = %s, want %s", res.Error.Code, CodeChainBroken)
+	}
+	if res.Error.Step != 1 {
+		t.Errorf("step = %d, want 1 (chain build)", res.Error.Step)
 	}
 }
 
@@ -270,54 +281,6 @@ func TestVerifyDeepChainExceedsDepth(t *testing.T) {
 	}
 }
 
-func TestVerifyRestateHappyPath(t *testing.T) {
-	now := time.Now().Unix()
-	store := delegation.NewMemoryProofStore()
-	platformKey, platformDID := genKey(t)
-	agentKey, agentDID := genKey(t)
-	leafKey, leafDID := genKey(t)
-	_, verifierDID := genKey(t)
-
-	toolCap := vcap(t, credential.CanToolInvoke, "tool://server/*")
-	rootToken, err := credential.CreateUCAN(credential.UCANPayload{
-		Iss: platformDID, Aud: agentDID,
-		Att: []credential.Capability{toolCap},
-		Prf: []string{}, Exp: now + 3600, Nbf: now - 60, Iat: now,
-	}, platformKey)
-	if err != nil {
-		t.Fatalf("CreateUCAN: %v", err)
-	}
-	root, err := credential.ParseUCAN(rootToken)
-	if err != nil {
-		t.Fatalf("ParseUCAN: %v", err)
-	}
-	store.Put([]byte(rootToken))
-
-	subset := []credential.Capability{vcap(t, credential.CanToolInvoke, "tool://server/search")}
-	_, hopCID, err := delegation.DelegateRestate(root, leafDID, subset, agentKey, store)
-	if err != nil {
-		t.Fatalf("DelegateRestate: %v", err)
-	}
-
-	config := &VerifierConfig{
-		VerifierDID:     verifierDID,
-		TrustedRootDIDs: map[string]bool{platformDID: true},
-		MaxChainDepth:   10,
-		ProofStore:      store,
-		NonceCache:      NewMemoryNonceCache(),
-		RevocationCache: revocation.NewMemoryRevocationCache(),
-	}
-	inv, err := CreateInvocation(hopCID, credential.CanToolInvoke, "tool://server/search", nil, leafKey, verifierDID, "")
-	if err != nil {
-		t.Fatalf("CreateInvocation: %v", err)
-	}
-	if res := Verify(context.Background(), nil, inv, config); !res.OK {
-		t.Errorf("RESTATE verification failed: %v", res.Error)
-	}
-}
-
-// TestVerifyRootOnlyInlineToken exercises the inline-leaf overlay path: a
-// direct root credential presented with no proof store.
 func TestVerifyRootOnlyInlineToken(t *testing.T) {
 	now := time.Now().Unix()
 	platformKey, platformDID := genKey(t)
@@ -355,32 +318,31 @@ func TestVerifyRootOnlyInlineToken(t *testing.T) {
 	}
 }
 
-// TestVerifyMissingParent exercises the empty-store path when a referenced proof
-// is absent.
+// TestVerifyMissingParent exercises the path where a referenced proof is absent.
+// The hop is a RESTRICT block: since RESTATE was removed, a token carrying a prf
+// is rejected as a non-root element before the store is ever consulted, so it
+// can no longer stand in for "a hop whose parent is missing".
 func TestVerifyMissingParent(t *testing.T) {
 	now := time.Now().Unix()
 	key, did := genKey(t)
 	_, verifierDID := genKey(t)
-	// A hop whose parent proof is not available anywhere.
-	hopToken, err := credential.CreateUCAN(credential.UCANPayload{
-		Iss: "did:key:zParent", Aud: did,
-		Att: []credential.Capability{vcap(t, credential.CanToolInvoke, "tool://s/x")},
-		Prf: []string{"bafkreimissingaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
-		Exp: now + 3600, Nbf: now - 60, Iat: now,
-	}, key)
+	store := delegation.NewMemoryProofStore()
+
+	const missingCID = "bafkreimissingaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	_, raw, err := credential.CreateRestrictBlock(credential.DelegationParent{
+		CID: missingCID, Aud: did, Exp: now + 3600, Nbf: now - 60, DL: 5,
+	}, did, 4, credential.Constraints{credential.NewTimeWindow(now-60, now+3600)}, key)
 	if err != nil {
-		t.Fatalf("CreateUCAN: %v", err)
+		t.Fatalf("CreateRestrictBlock: %v", err)
 	}
-	hop, err := credential.ParseUCAN(hopToken)
-	if err != nil {
-		t.Fatalf("ParseUCAN: %v", err)
-	}
-	config := &VerifierConfig{VerifierDID: verifierDID, NonceCache: NewMemoryNonceCache()}
-	inv, err := CreateInvocation(hop.CID(), credential.CanToolInvoke, "tool://s/x", nil, key, verifierDID, "")
+	hopCID := store.Put(raw)
+
+	config := &VerifierConfig{VerifierDID: verifierDID, ProofStore: store, NonceCache: NewMemoryNonceCache()}
+	inv, err := CreateInvocation(hopCID, credential.CanToolInvoke, "tool://s/x", nil, key, verifierDID, "")
 	if err != nil {
 		t.Fatalf("CreateInvocation: %v", err)
 	}
-	res := Verify(context.Background(), hop, inv, config)
+	res := Verify(context.Background(), nil, inv, config)
 	if res.OK || res.Error.Code != CodeProofCacheMiss {
 		t.Errorf("code = %v, want O004 (OK=%v)", res.Error, res.OK)
 	}

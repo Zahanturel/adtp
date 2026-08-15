@@ -22,6 +22,7 @@ const MaxCaveatsPerBlock = 50
 // constraint types shared with capabilities (time_window, budget, param_limit).
 const (
 	ConstraintResourceRestrict ConstraintType = "resource_restrict"
+	ConstraintActionRestrict   ConstraintType = "action_restrict"
 	ConstraintMethodRestrict   ConstraintType = "method_restrict"
 	ConstraintMaxCalls         ConstraintType = "max_calls"
 	ConstraintDelegationDepth  ConstraintType = "delegation_depth"
@@ -45,9 +46,16 @@ var (
 )
 
 // RestrictBlock is a signed, restriction-only delegation object (Section 8.2).
-// It adds caveats to a parent credential without restating the capability set,
-// which is what makes RESTRICT structurally escalation-free: there is no
-// capability comparison anywhere in its verification.
+// It adds caveats to a parent credential without restating the capability set.
+//
+// The precise consequence: chain validation performs no set-containment
+// comparison, because no element below the root carries a capability set to
+// compare. The per-hop invariants are scalar (see ValidateAgainstParent and
+// step2Linkage). This is not the same as "no comparison anywhere" — URICovers
+// and CanonicalizeURI still run at authorization, on every verification. What
+// the design removes is per-hop semantic comparison, where a mistake widens a
+// credential; what remains runs once against the root's grant, where a mistake
+// denies a request.
 type RestrictBlock struct {
 	Typ  string      `json:"typ"`
 	Iss  string      `json:"iss"`
@@ -245,6 +253,60 @@ func (c ResourceRestrictConstraint) Validate() error {
 		return fmt.Errorf("%w: resource_restrict resource is not canonical", ErrInvalidConstraint)
 	}
 	return nil
+}
+
+// ActionRestrictConstraint narrows the set of abilities (`can` values) a
+// delegate may exercise, intersecting whatever the path already permits.
+//
+// It exists because nothing else in the caveat vocabulary constrains `can`.
+// ctx.Action is compared exactly once in the whole verifier — against the root
+// capability's `can` in step 8 — so before this caveat a holder of both
+// resource/read and resource/write over one URI space had no way to delegate
+// read-only under RESTRICT. resource_restrict narrows *what* may be touched and
+// method_restrict inspects a request parameter, but neither narrows *what may be
+// done*; read-only delegation is the most ordinary attenuation there is, and its
+// absence was the one gap that made RESTRICT genuinely less expressive than the
+// alternatives rather than merely more constrained.
+//
+// Like every caveat it is conjunctive: each block's action_restrict must admit
+// the requested action independently, so a chain's effective action set is the
+// intersection down the path and a child can only ever narrow it further.
+type ActionRestrictConstraint struct {
+	Type    ConstraintType `json:"type"`
+	Actions []string       `json:"actions"`
+}
+
+func (c ActionRestrictConstraint) Kind() string { return string(ConstraintActionRestrict) }
+
+// Validate requires a non-empty action list drawn entirely from the closed
+// ability set of this ucv. An unrecognized name is rejected at issuance rather
+// than carried: a caveat listing only actions the verifier cannot recognize
+// would otherwise be indistinguishable from one that permits nothing, and the
+// difference between "denies everything" and "means something this build does
+// not implement" is exactly the distinction that must not be guessed.
+func (c ActionRestrictConstraint) Validate() error {
+	if c.Type != ConstraintActionRestrict {
+		return fmt.Errorf("%w: action_restrict has type %q", ErrInvalidConstraint, c.Type)
+	}
+	if len(c.Actions) == 0 {
+		return fmt.Errorf("%w: action_restrict requires at least one action", ErrInvalidConstraint)
+	}
+	for _, a := range c.Actions {
+		if !ValidCapabilityType(a) {
+			return fmt.Errorf("%w: action_restrict names unknown ability %q", ErrInvalidConstraint, a)
+		}
+	}
+	return nil
+}
+
+// Permits reports whether action is in the permitted set.
+func (c ActionRestrictConstraint) Permits(action string) bool {
+	for _, a := range c.Actions {
+		if a == action {
+			return true
+		}
+	}
+	return false
 }
 
 // MethodRestrictConstraint restricts the allowed methods or operations.

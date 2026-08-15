@@ -181,8 +181,8 @@ func mapChainError(err error) *VerificationError {
 		return verr(1, CodeBranching, err, "branching unsupported")
 	case errors.Is(err, delegation.ErrProofNotFound):
 		return verr(1, CodeProofCacheMiss, err, "proof not found")
-	case errors.Is(err, delegation.ErrModeMixing):
-		return verr(1, CodeChainBroken, err, "illegal mode mixing")
+	case errors.Is(err, delegation.ErrNonRootToken):
+		return verr(1, CodeChainBroken, err, "non-root element is a UCAN token")
 	case errors.Is(err, delegation.ErrCIDMismatch):
 		return verr(1, CodeCIDMismatch, err, "cid mismatch")
 	default:
@@ -321,35 +321,24 @@ func statusError(status revocation.RevocationStatus) *VerificationError {
 	}
 }
 
-// step7Attenuation enforces integrity per hop. RESTRICT hops are escalation-free
-// by construction (the earlier structural checks suffice); RESTATE hops require
-// capability_leq plus a valid att_seal.
+// step7Attenuation enforces per-hop attenuation integrity.
+//
+// It has no work to do. Only the root element carries a capability set, so no
+// hop can widen one, and the binding invariants that make that true are scalar
+// comparisons already enforced in step 2. This is the property RESTATE's removal
+// bought: chain validation performs no set-containment comparison at any hop.
+//
+// The step is kept as a named no-op rather than deleted so the pipeline's step
+// numbering stays aligned with the specification, and so that any future hop
+// type carrying its own capabilities has an obvious place to be checked — and an
+// obvious reason to be argued about first.
 func step7Attenuation(chain *delegation.Chain) error {
 	for i := 0; i+1 < len(chain.Elements); i++ {
-		child := chain.Elements[i]
-		if child.Mode != delegation.ModeRestate {
-			continue
-		}
-		parent := chain.Elements[i+1]
-		if parent.Token == nil {
-			return verr(7, CodeChainBroken, nil, "hop %d: RESTATE parent is not a token", i)
-		}
-		if !credential.CapabilitiesSubset(child.Token.Payload.Att, parent.Token.Payload.Att) {
-			return verr(7, CodeAttenuation, nil, "hop %d: restated capabilities exceed parent", i)
-		}
-		seal := child.Token.Header.Seal
-		if seal == nil {
-			return verr(7, CodeAttenuation, nil, "hop %d: RESTATE hop missing att_seal", i)
-		}
-		pub, err := identity.ResolveDID(child.Token.Payload.Iss)
-		if err != nil {
-			return verr(7, CodeDIDResolution, err, "hop %d: resolve seal signer", i)
-		}
-		if err := credential.VerifyAttSeal(seal, child.Token.Payload.Att, pub); err != nil {
-			return verr(7, CodeAttenuation, err, "hop %d: att_seal", i)
-		}
-		if seal.Aud != child.Token.Payload.Aud || seal.Prf != elemParentCID(child) {
-			return verr(7, CodeAttenuation, nil, "hop %d: att_seal aud/prf mismatch", i)
+		if chain.Elements[i].Token != nil {
+			// Unreachable via BuildChain, which rejects a non-root token outright.
+			// Kept because this function's guarantee is "no element below the root
+			// carries capabilities", and that should be checked where it is claimed.
+			return verr(7, CodeChainBroken, nil, "hop %d: non-root element carries a capability set", i)
 		}
 	}
 	return nil
@@ -402,9 +391,10 @@ func step8Authorization(chain *delegation.Chain, ctx InvocationContext) (*creden
 	return matched, nil
 }
 
-// effectiveAtt returns the capability set that binds the leaf: the att of the
-// nearest token walking from the leaf toward the root. RESTRICT blocks carry no
-// att, so the binding set is the most-recent RESTATE hop's att, or the root's.
+// effectiveAtt returns the capability set that binds the leaf. RESTRICT blocks
+// carry no att and are the only kind of hop, so this is always the root's — the
+// grant is written once, by the platform, and every hop below it can only add
+// caveats that narrow what may be done with it.
 func effectiveAtt(chain *delegation.Chain) []credential.Capability {
 	for _, e := range chain.Elements {
 		if e.Token != nil {
@@ -506,6 +496,14 @@ func evaluateConstraint(c credential.Constraint, ctx InvocationContext) error {
 	case credential.ResourceRestrictConstraint:
 		if !credential.URICovers(v.Resource, ctx.Resource) {
 			return fmt.Errorf("resource %q not covered by %q", ctx.Resource, v.Resource)
+		}
+		return nil
+	case credential.ActionRestrictConstraint:
+		// Unlike method_restrict, which reads a request parameter, this constrains
+		// the ability itself. An unknown action is not in the permitted set, so it
+		// denies — the caveat can only ever narrow.
+		if !v.Permits(ctx.Action) {
+			return fmt.Errorf("action %q is not in the permitted set %v", ctx.Action, v.Actions)
 		}
 		return nil
 	case credential.MethodRestrictConstraint:

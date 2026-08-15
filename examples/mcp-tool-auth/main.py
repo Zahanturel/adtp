@@ -75,7 +75,6 @@ def main():
     status, resp = adtp("POST", "/v1/delegations", {
         "parent_cid": root_cid,
         "audience_did": agent_b,
-        "mode": "restrict",
         "depth_left": 2,
         "caveats": [
             {"type": "resource_restrict", "resource": "tool://search/web"},

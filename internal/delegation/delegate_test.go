@@ -73,45 +73,6 @@ func TestDelegateRestrictDepthNotReduced(t *testing.T) {
 	}
 }
 
-func TestDelegateRestateSuccess(t *testing.T) {
-	store := NewMemoryProofStore()
-	root, _, _, agentKey := delegableRoot(t, store)
-
-	// The root grants tool://server/* ; restating tool://server/search is covered.
-	subset := []credential.Capability{mustCap(t, credential.CanToolInvoke, "tool://server/search")}
-	token, cid, err := DelegateRestate(root, "did:key:zChild", subset, agentKey, store)
-	if err != nil {
-		t.Fatalf("DelegateRestate: %v", err)
-	}
-	if _, err := store.Get(context.Background(), cid); err != nil {
-		t.Errorf("stored hop not found: %v", err)
-	}
-	hop, err := credential.ParseUCAN(token)
-	if err != nil {
-		t.Fatalf("ParseUCAN: %v", err)
-	}
-	if hop.Header.Seal == nil {
-		t.Errorf("restate hop missing att_seal")
-	}
-}
-
-func TestDelegateRestateEscalation(t *testing.T) {
-	store := NewMemoryProofStore()
-	root, _, _, agentKey := delegableRoot(t, store)
-
-	// The root has no resource/write capability; restating it is escalation.
-	escalated := []credential.Capability{mustCap(t, credential.CanResourceWrite, "resource://db/customers")}
-	if _, _, err := DelegateRestate(root, "did:key:zChild", escalated, agentKey, store); !errors.Is(err, ErrEscalation) {
-		t.Errorf("err = %v, want ErrEscalation", err)
-	}
-
-	// Widening the wildcard scope is also escalation.
-	widened := []credential.Capability{mustCap(t, credential.CanToolInvoke, "tool://server/a/b")}
-	if _, _, err := DelegateRestate(root, "did:key:zChild", widened, agentKey, store); !errors.Is(err, ErrEscalation) {
-		t.Errorf("widened err = %v, want ErrEscalation", err)
-	}
-}
-
 func TestParentFromUCANNonDelegable(t *testing.T) {
 	store := NewMemoryProofStore()
 	platformKey, platformDID := genID(t)

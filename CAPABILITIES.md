@@ -155,9 +155,9 @@ Bounds further delegation depth. Used on `agent/delegate` capabilities to set th
 |---|---|---|
 | `max` | integer | Non-negative maximum delegation depth |
 
-## Caveat Types (RESTRICT mode)
+## Caveat Types
 
-Caveats are used in RESTRICT mode delegations. They can only add restrictions, never remove them. Every caveat from every block in the chain is evaluated at verification step 8 — a child cannot drop a parent's caveat by omitting it, because the parent block is still walked.
+Caveats are carried by delegation blocks — the only kind of delegation there is. They can only add restrictions, never remove them. Every caveat from every block in the chain is evaluated at verification step 8, so a child cannot drop a parent's caveat by omitting it: the parent block is still walked.
 
 ### `time_window`
 
@@ -179,9 +179,27 @@ Narrows the resource URI the credential may target.
 |---|---|---|
 | `resource` | string | Canonical URI. Must match the URI canonicalization rules |
 
+### `action_restrict`
+
+Narrows the set of abilities (`can` values) the delegate may exercise, intersecting whatever the path already permits. This is how read-only delegation is expressed.
+
+```json
+{"type": "action_restrict", "actions": ["resource/read"]}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `actions` | array | Non-empty list of `can` values, each from the closed action set above |
+
+An action name outside the closed set is **rejected at issuance**, not carried. A caveat listing only abilities the verifier cannot recognize would otherwise be indistinguishable from one that permits nothing, and "denies everything" must not be confused with "means something this build does not implement".
+
+Being conjunctive with every other caveat, the effective action set is the intersection down the chain: if one block permits `{read, write}` and a later block permits `{read}`, the leaf may only read. A child listing an action its parent excluded gains nothing, because the parent's caveat is evaluated independently at step 8.
+
+Note the division of labour with `method_restrict`: `action_restrict` constrains the *ability* (`can`), while `method_restrict` inspects the `method` invocation parameter. They are not substitutes — a payload check cannot narrow what the credential is for.
+
 ### `method_restrict`
 
-Restricts the allowed methods or operations.
+Restricts the allowed methods or operations. This is a **payload check**: it reads the `method` key from the invocation parameters. To narrow the ability itself, use `action_restrict`.
 
 ```json
 {"type": "method_restrict", "methods": ["GET", "HEAD"]}
@@ -237,7 +255,6 @@ curl -X POST localhost:8080/v1/delegations \
   -d '{
     "parent_cid": "<cid>",
     "audience_did": "<did>",
-    "mode": "restrict",
     "depth_left": 3,
     "caveats": [
       {"type": "resource_restrict", "resource": "tool://search.example/query"},

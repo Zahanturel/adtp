@@ -8,7 +8,7 @@
 
 A cryptographic protocol for AI agent identity, delegation, credential lifecycle, and cross-organizational trust — the authorization control plane for autonomous agents.
 
-**Architecture:** UCAN-compatible JWT credentials rooted in did:key (agents) and did:web with pinned root keys (organizations). Ed25519 today; hybrid Ed25519+ML-DSA at v1.0. Two attenuation modes: RESTATE (v0.2-compatible, semantic subsumption plus serialization seal) and RESTRICT (monotone caveat blocks, structurally escalation-free; primary mode). Proof-of-possession invocations with dual-principal authorization and TLS channel binding. Risk-tiered revocation with an explicit authority model and provably complete cascade via first-use registration. An RFC 6962-style transparency log (witness-cosigned) unifying issuance registration, revocation enumeration, and audit checkpointing. Symmetric session credentials for high-frequency invocation. Budgeted (metered) capabilities. Bilateral, non-transitive org trust with bundle distribution. Transport bindings for MCP (HTTP and stdio), A2A, and generic HTTPS.
+**Architecture:** UCAN-compatible JWT credentials rooted in did:key (agents) and did:web with pinned root keys (organizations). Ed25519 today; hybrid Ed25519+ML-DSA at v1.0. One attenuation mode: RESTRICT (monotone caveat blocks; no set-containment comparison in chain validation). Proof-of-possession invocations with dual-principal authorization and TLS channel binding. Risk-tiered revocation with an explicit authority model and provably complete cascade via first-use registration. An RFC 6962-style transparency log (witness-cosigned) unifying issuance registration, revocation enumeration, and audit checkpointing. Symmetric session credentials for high-frequency invocation. Budgeted (metered) capabilities. Bilateral, non-transitive org trust with bundle distribution. Transport bindings for MCP (HTTP and stdio), A2A, and generic HTTPS.
 
 **Stack:** Go core daemon + TypeScript/Python SDKs. Apache 2.0 open-source core; commercial managed log / registry / metering network.
 
@@ -22,7 +22,7 @@ A cryptographic protocol for AI agent identity, delegation, credential lifecycle
 
 **Agent:** A principal with a sponsor, an operational scope, an activity horizon, delegation capability (restriction-only in RESTRICT mode), and a registration record.
 
-**Credential:** Root credential = UCAN JWT (`iss` platform did:web, `aud` agent did:key, `att` capabilities array max 100, `prf` = [], `exp` mandatory, `nbf`, `iat`, `alg`, `ucv`). Non-root hop = RESTATE token (Section 8.3) or RESTRICT block (Section 8.2).
+**Credential:** Root credential = UCAN JWT (`iss` platform did:web, `aud` agent did:key, `att` capabilities array max 100, `prf` = [], `exp` mandatory, `nbf`, `iat`, `alg`, `ucv`). Non-root hop = RESTRICT block (Section 8.2). A non-root UCAN token is rejected.
 
 **Attenuation Block (cav):** Signed restriction-only delegation object (Section 8.2). Adds caveats; never restates authority.
 
@@ -45,7 +45,7 @@ These rules apply to every signed structure in the protocol. They exist to elimi
 - **SD-1:** Every signed non-JWT object is a single JSON object with a mandatory `typ` field of the form `adtp/<kind>/<version>`. Kinds: `cav`, `seal`, `inv`, `rev`, `trust`, `bundle`, `ckpt`, `sess`, `rcpt`, `cont`, `meta`.
 - **SD-2:** Signature input = ASCII `"AITP1"` || 0x00 || JCS(object with `sig` field removed). The `"AITP1"` prefix is frozen; changing it would invalidate all existing signatures. Domain separation is provided by the prefix plus `typ`. Raw concatenation of variable-length fields appears nowhere in the protocol.
 - **SD-3:** I-JSON (RFC 7493) required for all signed structures. Duplicate keys MUST be rejected at parse time. All numeric protocol values are integers; monetary amounts are in minor units. No floats in signed objects.
-- **SD-4:** JWTs (root and RESTATE UCANs) retain JWS compact form for ecosystem compatibility; the header MUST carry `typ: "adtp/ucan/1"` and `alg`; the payload is subject to SD-3.
+- **SD-4:** JWTs (root UCANs) retain JWS compact form for ecosystem compatibility; the header MUST carry `typ: "adtp/ucan/1"` and `alg`; the payload is subject to SD-3.
 - **SD-5:** CID profile: CIDv1, raw codec (0x55), multihash sha2-256, computed over the complete serialized credential bytes (JWS compact bytes for JWTs; JCS bytes including `sig` for objects). `prf` therefore pins both content and signature.
 - **SD-6:** Verifiers MUST verify signatures over the received raw bytes, then parse. Any divergence between the raw-byte hash and the re-serialized hash of the parsed object ⇒ REJECT.
 - **SD-7:** Unknown fields in signed objects are permitted (covered by the signature, ignored by processing) unless listed in a `crit` array (X.509-style). An unrecognized `crit` entry ⇒ REJECT.
@@ -59,13 +59,13 @@ Status vocabulary: **SOUND-BY-CONSTRUCTION** (structural; violation requires bre
 | ID | Property | Mechanisms | Status |
 |----|----------|-----------|--------|
 | P1 | Mutual Authentication | Ed25519 PoP + pinned org root keys + DNSSEC/CT for did:web | SOUND (argued) |
-| P2 | Delegation Integrity | RESTRICT: monotone-by-construction — escalation requires forging an issuer signature or a SHA-256 collision; no semantic comparison in the TCB. RESTATE: capability_leq + att_seal (serialization defense only) | **SOUND-BY-CONSTRUCTION (RESTRICT)** / DEPENDENT on capability_leq (RESTATE) |
+| P2 | Delegation Integrity | Monotone-by-construction: chain escalation requires forging an issuer signature or a SHA-256 collision. No set-containment comparison in chain validation; per-hop invariants are scalar. Authorization-time URI coverage remains and is not part of this property | **SOUND-BY-CONSTRUCTION** |
 | P3 | Non-repudiation | Issuer signature per hop + ATL inclusion | SOUND (EUF-CMA) |
 | P4 | Proof-of-Possession | Invocation signature + nonce + channel binding (REQUIRED by tier) + on_behalf_of dual chain + cache-restart quarantine | SOUND (argued) |
 | P5 | Revocability | Authority model + tiered staleness + emergency channel + explicit cascade + first-use registration + reconciliation | SOUND (argued; completeness derives from the registration invariant, Section 13.6) |
 | P6 | Auditability | Hash-linked log + ATL-cosigned checkpoints + durable enqueue before allow at HIGH | SOUND (SHA-256; truncation detectable) |
 | P7 | Offline Verifiability | Self-contained chains + cached revocation | HOLDS for MEDIUM/LOW/ANALYTICS only; HIGH requires online revocation and registration evidence |
-| P8 | Scope Containment | Existential authorization + P2 + dual authorization; no union operation; multi-proof prohibited in v1.x | SOUND-BY-CONSTRUCTION (RESTRICT) / DEPENDENT (RESTATE) |
+| P8 | Scope Containment | Existential authorization + P2 + dual authorization; no union operation; multi-proof prohibited in v1.x | SOUND-BY-CONSTRUCTION |
 | P9 | Session Security | Session key bound to chain CID + channel; lifetime ≤ tier staleness bound | SOUND (argued) |
 | P10 | Minimal Disclosure | Pairwise DIDs, Delegation Gateway, hash-only audit parameters | ARGUED (no cryptographic selective disclosure until v2) |
 
@@ -75,7 +75,7 @@ Status vocabulary: **SOUND-BY-CONSTRUCTION** (structural; violation requires bre
 
 **13 adversary classes:** the v0.2 twelve — A_net, A_cred, A_key, A_orch, A_reg, A_collude, A_dos, A_ghost, A_compose, A_econ, A_strategic, A_temporal — plus **A_parser** (serialization/parsing-differential adversary exploiting divergence between signed bytes and the application's parsed view).
 
-**Named attacks and controls:** Delegation Escalation (RESTRICT: requires signature forgery; RESTATE: capability_leq + seal). Phantom Delegation (issuer signatures + CID pinning per SD-5). Confused Deputy (on_behalf_of dual-authorization). Circular Delegation (seen-CID set + depth limits + Section 8.6). Replay (nonce + iat window + channel binding + sessions). Filter Poisoning (per-issuer filter governance, Section 13.5). Budget Exhaustion / Salami Invocation (budget caveats, Section 7.6). Domain Seizure (org root key pinning, Section 15.1). Log Split-View (witness cosigning + gossip, Section 14.2). Cache-Restart Replay (quarantine, Section 10.5).
+**Named attacks and controls:** Delegation Escalation (requires signature forgery). Phantom Delegation (issuer signatures + CID pinning per SD-5). Confused Deputy (on_behalf_of dual-authorization). Circular Delegation (seen-CID set + depth limits + Section 8.6). Replay (nonce + iat window + channel binding + sessions). Filter Poisoning (per-issuer filter governance, Section 13.5). Budget Exhaustion / Salami Invocation (budget caveats, Section 7.6). Domain Seizure (org root key pinning, Section 15.1). Log Split-View (witness cosigning + gossip, Section 14.2). Cache-Restart Replay (quarantine, Section 10.5).
 
 **Explicit non-goals:** Sybil resistance, reputation, agent behavioral safety, content authenticity. ADTP authenticates and authorizes; accountability anchors to sponsors; reputation systems may consume ATL data but are out of scope.
 
@@ -107,18 +107,29 @@ Applied at issuance and verification:
 - `URI_COVERS(parent, child)`: equal scheme, equal authority, parent path is a prefix of child path on whole-segment boundaries; a single `*` segment matches exactly one non-empty segment; `**` is reserved and undefined in v1.x.
 - Verifiers MUST re-canonicalize and compare byte-equal to the issued form; mismatch ⇒ REJECT.
 
-### 7.3 Constraint semantics — two evaluation times
-- **Attenuation time (RESTATE only):** child constraint at least as tight — numeric `child ≤ parent`; allowlist `child ⊆ parent`; time_window contained; parameter_schema implies (7.5).
-- **Invocation time (both modes):** every constraint and caveat on the path MUST be evaluated against the invocation context — `(action, resource, parameters, now, channel, metering state)`. Any unsatisfied predicate ⇒ DENY. This evaluation is verification step 8 and is not optional.
+### 7.3 Constraint semantics — evaluation time
+- **Invocation time:** every constraint and caveat on the path MUST be evaluated against the invocation context — `(action, resource, parameters, now, channel, metering state)`. Any unsatisfied predicate ⇒ DENY. This evaluation is verification step 8 and is not optional.
 
 ### 7.4 time_window
 `[start, end)` half-open, UNIX seconds, integers (SD-3).
 
+### 7.4.1 action_restrict
+Narrows the set of abilities (`can` values) exercisable through the chain, intersecting whatever the path already permits.
+
+```
+{ "type": "action_restrict",
+  "actions": [<can>, ...] }        // non-empty; each drawn from the closed set of Section 7.1
+```
+
+An action name outside the closed set of this `ucv` ⇒ REJECT at issuance. Conjunctive with every other caveat, so the effective action set is the intersection along the path and a child can only narrow it. Distinct from `method_restrict`, which is a predicate over an invocation *parameter*: `action_restrict` constrains the ability, not the payload.
+
+Without it the `can` field is compared exactly once in the whole verifier — against the root's `att` at step 8 — so a root holding two abilities over one URI space cannot delegate either one alone. Read-only delegation was inexpressible before this caveat existed.
+
 ### 7.5 parameter_schema
-v0.x: deep_equals (conservative). v1.0: decidable fragment **ADTP-PS1** — a conjunction of per-field predicates from {`const`, `enum`, integer `range [min, max]`, string `max_length`, regex from an RE1 subset (no backreferences, no lookaround)}. Implication checking is field-wise and decidable. Predicates outside the fragment: at RESTATE attenuation ⇒ not comparable ⇒ REJECT; as RESTRICT caveats ⇒ permitted (caveats require only evaluation, never implication — RESTRICT may safely carry richer predicates).
+v0.x: deep_equals (conservative). v1.0: decidable fragment **ADTP-PS1** — a conjunction of per-field predicates from {`const`, `enum`, integer `range [min, max]`, string `max_length`, regex from an RE1 subset (no backreferences, no lookaround)}. Implication checking is field-wise and decidable. Predicates outside the fragment are permitted as caveats: a caveat requires only evaluation, never implication.
 
 ### 7.6 Budget (cumulative authority metering)
-Caveat (RESTRICT) or leaf constraint (RESTATE):
+Caveat:
 
 ```
 { "type": "budget",
@@ -132,7 +143,7 @@ Caveat (RESTRICT) or leaf constraint (RESTATE):
 Semantics: **cumulative** across invocations within the window.
 - `meter: "verifier"` — the verifier maintains a durable counter keyed `(scope CID, dim, window)`. Multi-node verifiers MUST serialize on a shared counter; per-node split counters are non-conformant.
 - `meter: "receipts"` — on each allow the verifier returns a signed receipt `{ typ: "adtp/rcpt/1", scope_cid, dim, amount, cum, seq, window, sig }`. The invoker MUST present the latest receipt on the next invocation; a missing or forked receipt chain ⇒ DENY. Receipts are per-verifier.
-- **Cross-verifier shared budgets** require either a metering service (interface in Section 16.5; operationally a product, not a protocol dependency) or **budget pre-splitting**: a delegator divides a budget into disjoint child branches, each carrying its own budget caveat; the parent's caveat remains as a conjunctive ceiling. In RESTATE, attenuation MUST enforce Σ(child limits) ≤ parent limit across siblings it issues.
+- **Cross-verifier shared budgets** require either a metering service (interface in Section 16.5; operationally a product, not a protocol dependency) or **budget pre-splitting**: a delegator divides a budget into disjoint child branches, each carrying its own budget caveat; the parent's caveat remains as a conjunctive ceiling.
 - Per-invocation maxima are a distinct caveat: `{ "type": "param_limit", "field": ..., "max": ... }`.
 
 ### 7.7 Lifetime profile
@@ -151,7 +162,7 @@ Semantics: **cumulative** across invocations within the window.
 | Session | min(leaf exp, tier staleness bound) — Section 12 |
 
 ### 7.8 Composition
-The `att` array is a disjunction for authorization (match any) and a conjunctive-coverage requirement for RESTATE delegation (each child capability covered by some parent capability). Caveat lists are conjunctive always. No union or amplification operation exists; multi-proof chains are prohibited in v1.x (P8).
+The `att` array is a disjunction for authorization (match any). Caveat lists are conjunctive always. No union or amplification operation exists; multi-proof chains are prohibited in v1.x (P8).
 
 ### 7.9 Size limits
 ≤ 100 capabilities per token; ≤ 50 caveats per block; ≤ 1,000 capabilities + caveats per chain. Byte-identical duplicate entries collapse and count once.
@@ -178,13 +189,15 @@ Delegation A→B is a signed restriction object:
   "sig": <SD-2 signature by A> }
 ```
 
-Effective authority of the leaf = root `att` ∧ every caveat on the path, evaluated at invocation time. A block adds restrictions only; there is no restated capability set and therefore no subsumption computation anywhere in chain verification. Escalation requires forging an issuer signature or a SHA-256 collision on `prf` linkage. Unknown caveat types ⇒ REJECT (a restriction the verifier cannot evaluate must fail closed).
+Effective authority of the leaf = root `att` ∧ every caveat on the path, evaluated at invocation time. A block adds restrictions only; no element below the root carries a capability set, and therefore **chain validation performs no set-containment comparison**. This is not the same as "no comparison": `URICovers` and `CanonicalizeURI` run at step 8 on every verification, and `evaluateConstraint` dispatches nine constraint types. What the structure removes is per-hop semantic comparison against a parent, where an error widens a credential; what remains runs once against the root's grant, where an error denies or misroutes a single request. Escalation via the chain requires forging an issuer signature or a SHA-256 collision on `prf` linkage. Unknown caveat types ⇒ REJECT (a restriction the verifier cannot evaluate must fail closed).
 
-### 8.3 RESTATE hop (compatibility mode)
-The v0.2 form: child UCAN with restated `att` ⊆ parent `att`, verified by `capability_leq`, carrying `att_seal` (Section 9). Supported for compatibility; REQUIRES capability_leq verification; deprecated for new chains at v1.0.
+### 8.3 One delegation mode
+There is no mode in which a hop restates a capability set. A chain is one root credential plus zero or more RESTRICT blocks; a non-root element carrying `att` is REJECTED at chain build.
+
+RESTATE (the v0.2 compatibility form: a child UCAN with restated `att` ⊆ parent `att`, verified by `capability_leq` and sealed with `att_seal`) was specified through v0.2 and is **removed as of v0.2.0**. It existed for compatibility with a protocol version that never had an implementation, and it was the sole reason a capability-comparison function was in the trusted computing base. Removing it removed `capability_leq`, `att_seal`, the mode-mixing rule, and the `mode` parameter on the delegation API.
 
 ### 8.4 Mode mixing
-RESTRICT after RESTATE: permitted (caveats restrict the restated set). RESTATE after RESTRICT: PROHIBITED — it would require restating an intersection, reintroducing semantic comparison. Rejected structurally at verification step 1.
+Not applicable. One mode, no mixing rule.
 
 ### 8.5 Issuance registration
 Online issuance (issuer has registry/ATL connectivity) SHOULD register at issuance: atomic write of the credential CID plus the `chain_contains_cid` array. Offline issuance is permitted; the chain becomes registered at first use (step 11, Section 11). **Cascade completeness invariant:** no chain is authorized at HIGH or MEDIUM before all of its hops carry registration evidence (Section 13.6). This replaces the v0.2 atomicity rule, which either centralized all issuance or silently broke cascade completeness for offline-minted chains.
@@ -194,19 +207,11 @@ Online issuance (issuer has registry/ATL connectivity) SHOULD register at issuan
 
 ---
 
-## 9. att_seal (Rescoped)
+## 9. att_seal (Removed)
 
-Construction (RESTATE hops only), per SD-2, embedded in the child token header:
+`att_seal` was a second signature over the canonicalized capability set of a RESTATE hop. It defended against serialization and parsing differentials only — it did not extend the trust model, because the seal signer was the hop issuer, the same key that signed the token. With RESTATE removed there is no hop that carries a capability set, so there is nothing to seal. The mechanism is gone from the implementation.
 
-```
-{ "typ": "adtp/seal/1",
-  "d":   base64url(SHA-256(JCS(child.att))),
-  "aud": <child.aud>,
-  "prf": <CID(parent)>,
-  "sig": <SD-2 signature by the hop issuer> }
-```
-
-**Purpose (normative, honest):** the seal defends against serialization and parsing differentials — duplicate-key smuggling, divergence between the JWS-signed raw bytes and the application's parsed `att` — by forcing the verifier to recompute the digest over the parsed, canonicalized `att` and match it against the sealed digest. It does NOT extend the trust model: the seal signer is the hop issuer, the same key that signs the token, and a malicious issuer signs escalated capabilities as willingly as honest ones. P2 in RESTATE mode remains DEPENDENT on capability_leq. The v0.2 claim that att_seal renders P2 sound independently of capability_leq is withdrawn. Required at v1.0 for RESTATE hops; structurally unnecessary and absent in RESTRICT.
+The differential it defended against is now handled where it actually arises, by SD-6: a RESTRICT block whose received bytes differ from the canonical re-serialization of the parsed object is REJECTED (see Section 3).
 
 ---
 
@@ -250,7 +255,7 @@ Construction (RESTATE hops only), per SD-2, embedded in the child token header:
 4. **Signatures:** every hop per SD-2/SD-4/SD-6; algorithm ≥ per-role minimum (Section 6); no anchor downgrade.
 5. **Temporal:** now ∈ [nbf − 60, exp + 60] for all hops; invocation `iat` within 60 s.
 6. **Revocation:** latest-sequence status per subject (13.3); staleness within tier bound (HIGH: online); REVOKED / COMPROMISED / CASCADE / DECOMMISSIONED ⇒ DENY; SUSPENDED ⇒ DENY (resumable).
-7. **Attenuation integrity:** RESTRICT hops — structural; format checks from steps 0–2 suffice. RESTATE hops — `capability_leq(child, parent)` AND att_seal digest + signature.
+7. **Attenuation integrity:** structural. Only the root carries a capability set, so no hop can widen one; the binding invariants are the scalar checks of steps 0–2. This step has no remaining work and is retained for step-number stability.
 8. **Authorization:** action/resource matched against root `att` (existential); then every constraint and caveat on the path evaluated against the invocation context, including `run.parameters`; budget counters consulted and updated as part of the allow transaction (7.6).
 9. **Cross-org:** every did:web issuer ∈ ORG_TRUST `platforms`; chain depth ≤ ORG_TRUST `max_delegation_depth`; requested scope within ORG_TRUST capabilities; trust document fresh ≤ 5 min (no stale fallback); org root key pin match (15.1).
 10. **Proof-of-possession:** invocation signature under leaf `aud` key; `aud` == verifier; nonce unseen (10.5); channel binding (10.3/10.4); obo dual-chain (10.1).
@@ -486,7 +491,6 @@ Competitor rows MUST be re-verified against current drafts before any external u
 
 ## 22. Known Limitations
 
-1. RESTATE mode retains the capability_leq dependence (sunset at v1.0).
 2. Cross-verifier shared budgets require a metering service or pre-splitting; there is no global atomic counter without coordination.
 3. Key rotation invalidates all active delegations (strict by design); the continuity record preserves lineage only.
 4. LOW/ANALYTICS cascade lag is bounded but nonzero (13.6).

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Package delegation builds and issues ADTP delegation chains: walking prf
-// links from a leaf to its root, and minting RESTRICT blocks and RESTATE hops.
+// links from a leaf to its root, and minting RESTRICT blocks.
 package delegation
 
 import (
@@ -24,11 +24,11 @@ const (
 	MaxChainCapsCaveats = 1000
 )
 
-// Delegation modes.
+// Delegation modes. A chain is one root credential plus zero or more RESTRICT
+// blocks; there is no mode in which a hop restates a capability set.
 const (
 	ModeRoot     = "root"
 	ModeRestrict = "restrict"
-	ModeRestate  = "restate"
 )
 
 // Chain-building errors. The verify package maps these to the AGENT_ERR_V_*
@@ -42,7 +42,7 @@ var (
 	ErrChainTooWide         = errors.New("delegation chain exceeds capability+caveat limit")
 	ErrChainBroken          = errors.New("delegation chain is broken or malformed")
 	ErrBranchingUnsupported = errors.New("multi-proof (branching) chains are unsupported")
-	ErrModeMixing           = errors.New("RESTATE after RESTRICT is prohibited")
+	ErrNonRootToken         = errors.New("only the root element may be a UCAN token; delegation hops are RESTRICT blocks")
 )
 
 // ProofStore resolves a credential or block by its CID. Bytes returned are the
@@ -134,9 +134,6 @@ func BuildChain(ctx context.Context, leafCID string, store ProofStore, maxDepth 
 		cid = parentCID
 	}
 
-	if err := checkModeMixing(elements); err != nil {
-		return nil, err
-	}
 	return &Chain{Elements: elements, Depth: len(elements) - 1}, nil
 }
 
@@ -164,27 +161,14 @@ func parseElement(raw []byte, cid string) (ChainElement, string, int, error) {
 	case 0:
 		return ChainElement{Token: token, CID: cid, IsRoot: true, Mode: ModeRoot}, "", weight, nil
 	case 1:
-		return ChainElement{Token: token, CID: cid, Mode: ModeRestate}, token.Payload.Prf[0], weight, nil
+		// A token with a proof was a RESTATE hop. That mode is gone, and a chain
+		// element carrying its own capability set is the thing whose removal makes
+		// chain validation comparison-free — so it is rejected outright rather than
+		// tolerated.
+		return ChainElement{}, "", 0, fmt.Errorf("adtp/delegation: %w: %s", ErrNonRootToken, cid)
 	default:
 		return ChainElement{}, "", 0, fmt.Errorf("adtp/delegation: %w: %d proofs", ErrBranchingUnsupported, len(token.Payload.Prf))
 	}
-}
-
-// checkModeMixing enforces Section 8.4: walking in delegation order (root to
-// leaf), once a RESTRICT hop appears no later hop may be RESTATE.
-func checkModeMixing(elements []ChainElement) error {
-	restrictSeen := false
-	for i := len(elements) - 1; i >= 0; i-- {
-		switch elements[i].Mode {
-		case ModeRestrict:
-			restrictSeen = true
-		case ModeRestate:
-			if restrictSeen {
-				return fmt.Errorf("adtp/delegation: %w", ErrModeMixing)
-			}
-		}
-	}
-	return nil
 }
 
 // MemoryProofStore is an in-memory, concurrency-safe ProofStore.

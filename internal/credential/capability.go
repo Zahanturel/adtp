@@ -613,6 +613,12 @@ func unmarshalConstraint(data []byte) (Constraint, error) {
 			return nil, fmt.Errorf("%w: method_restrict: %v", ErrInvalidConstraint, err)
 		}
 		return c, nil
+	case ConstraintActionRestrict:
+		var c ActionRestrictConstraint
+		if err := json.Unmarshal(data, &c); err != nil {
+			return nil, fmt.Errorf("%w: action_restrict: %v", ErrInvalidConstraint, err)
+		}
+		return c, nil
 	case ConstraintMaxCalls:
 		var c MaxCallsConstraint
 		if err := json.Unmarshal(data, &c); err != nil {

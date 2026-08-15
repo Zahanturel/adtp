@@ -42,13 +42,11 @@ var (
 	ErrSignatureVerification = errors.New("UCAN signature verification failed")
 )
 
-// UCANHeader is the JWS header of an ADTP UCAN. A RESTATE hop additionally
-// carries its att_seal here (Section 9); root credentials omit it.
+// UCANHeader is the JWS header of an ADTP UCAN.
 type UCANHeader struct {
-	Typ  string   `json:"typ"`
-	Alg  string   `json:"alg"`
-	Ucv  string   `json:"ucv"`
-	Seal *AttSeal `json:"seal,omitempty"`
+	Typ string `json:"typ"`
+	Alg string `json:"alg"`
+	Ucv string `json:"ucv"`
 }
 
 // UCANPayload is the claim set of an ADTP UCAN. All timestamps are integer UNIX

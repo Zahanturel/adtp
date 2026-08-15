@@ -74,7 +74,7 @@ func TestMapChainError(t *testing.T) {
 		{delegation.ErrChainTooWide, CodeMalformed},
 		{delegation.ErrBranchingUnsupported, CodeBranching},
 		{delegation.ErrProofNotFound, CodeProofCacheMiss},
-		{delegation.ErrModeMixing, CodeChainBroken},
+		{delegation.ErrNonRootToken, CodeChainBroken},
 		{delegation.ErrCIDMismatch, CodeCIDMismatch},
 		{errors.New("unexpected"), CodeChainBroken},
 	}

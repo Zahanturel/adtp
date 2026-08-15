@@ -87,7 +87,7 @@ func TestScenario_DelegationChain(t *testing.T) {
 	// Agent A delegates to Agent B with RESTRICT mode.
 	// RESTRICT requires at least one caveat (you're adding restrictions).
 	now := time.Now().Unix()
-	code, delegatedCID := d.delegate(t, rootCID, agentB, "restrict", 4, []map[string]any{
+	code, delegatedCID := d.delegate(t, rootCID, agentB, 4, []map[string]any{
 		timeWindowCaveat(now-60, now+3600),
 	})
 	if code != http.StatusCreated {
@@ -123,7 +123,7 @@ func TestScenario_CascadeRevocation(t *testing.T) {
 
 	// Agent A -> Agent B (RESTRICT requires at least one caveat)
 	now := time.Now().Unix()
-	codeAB, cidAB := d.delegate(t, rootCID, agentB, "restrict", 4, []map[string]any{
+	codeAB, cidAB := d.delegate(t, rootCID, agentB, 4, []map[string]any{
 		timeWindowCaveat(now-60, now+3600),
 	})
 	if codeAB != http.StatusCreated {
@@ -131,7 +131,7 @@ func TestScenario_CascadeRevocation(t *testing.T) {
 	}
 
 	// Agent B -> Agent C
-	codeBC, cidBC := d.delegate(t, cidAB, agentC, "restrict", 3, []map[string]any{
+	codeBC, cidBC := d.delegate(t, cidAB, agentC, 3, []map[string]any{
 		timeWindowCaveat(now-60, now+3600),
 	})
 	if codeBC != http.StatusCreated {
@@ -197,21 +197,21 @@ func TestScenario_EscalationBlocked(t *testing.T) {
 	// Delegate with RESTRICT at dl=3.
 	now := time.Now().Unix()
 	baseCaveats := []map[string]any{timeWindowCaveat(now-60, now+3600)}
-	code, cidAB := d.delegate(t, rootCID, agentB, "restrict", 3, baseCaveats)
+	code, cidAB := d.delegate(t, rootCID, agentB, 3, baseCaveats)
 	if code != http.StatusCreated {
 		t.Fatalf("first delegation failed: %d %s", code, cidAB)
 	}
 
 	// Now Agent B tries to sub-delegate with dl=5 (escalation: 5 > parent's 3).
 	agentC := d.registerAgent(t, "admin@corp.com")
-	code, errMsg := d.delegate(t, cidAB, agentC, "restrict", 5, baseCaveats)
+	code, errMsg := d.delegate(t, cidAB, agentC, 5, baseCaveats)
 	if code == http.StatusCreated {
 		t.Fatal("escalation should be blocked, but delegation succeeded")
 	}
 	t.Logf("escalation blocked: %d %s", code, errMsg)
 
 	// A valid sub-delegation at dl=2 should work.
-	code, cidBC := d.delegate(t, cidAB, agentC, "restrict", 2, baseCaveats)
+	code, cidBC := d.delegate(t, cidAB, agentC, 2, baseCaveats)
 	if code != http.StatusCreated {
 		t.Fatalf("valid sub-delegation failed: %d %s", code, cidBC)
 	}
@@ -310,7 +310,7 @@ func TestScenario_CaveatAccumulation(t *testing.T) {
 
 	// Agent A -> Agent B with resource_restrict caveat
 	now := time.Now().Unix()
-	code, cidAB := d.delegate(t, rootCID, agentB, "restrict", 4, []map[string]any{
+	code, cidAB := d.delegate(t, rootCID, agentB, 4, []map[string]any{
 		resourceRestrictCaveat("tool://server/*"),
 		timeWindowCaveat(now-60, now+1800),
 	})
@@ -319,7 +319,7 @@ func TestScenario_CaveatAccumulation(t *testing.T) {
 	}
 
 	// Agent B -> Agent C with method_restrict caveat
-	code, cidBC := d.delegate(t, cidAB, agentC, "restrict", 3, []map[string]any{
+	code, cidBC := d.delegate(t, cidAB, agentC, 3, []map[string]any{
 		methodRestrictCaveat("GET"),
 	})
 	if code != http.StatusCreated {

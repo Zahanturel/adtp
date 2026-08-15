@@ -81,115 +81,95 @@ built to avoid. ADTP rejects branching outright
 `ErrBranchingUnsupported`). This is a real capability given up. Multi-parent delegation is
 a reasonable thing to want and this design cannot express it.
 
-## RESTRICT versus RESTATE: the same protocol with two different trusted computing bases
+## Why RESTATE was removed, and what that actually bought
 
-This is the most interesting thing in the codebase, and the two modes are worth comparing
-directly because they make the cost of semantic comparison legible.
+Until v0.2 this implementation shipped two delegation modes. RESTATE was conventional
+delegation: the child restates its capability set and the verifier checks containment.
+RESTRICT carries no capability set at all — a hop is a signed block of caveats.
 
-**RESTATE** is conventional delegation. The child restates its capability set and the
-verifier checks containment:
+RESTATE's containment check was `CapabilityLeq`: 115 lines that had to decide, for every
+pair of constraint kinds, whether the child was at least as tight as the parent. Whether one
+URI covers another. Whether a `nil` budget window meant "unbounded" (it did, for a parent) or
+"broader than the parent's" (it did, for a child). Whether an unmodeled constraint type was
+safe to permit (it was not; the `default:` branch returned false). Every one of those
+decisions was load-bearing: get one wrong and a child mints authority its parent never held.
 
-```go
-// internal/verify/steps.go, step 7
-if !credential.CapabilitiesSubset(child.Token.Payload.Att, parent.Token.Payload.Att) {
-    return verr(7, CodeAttenuation, nil, "hop %d: restated capabilities exceed parent", i)
-}
-```
+The code was careful, and it was still trusted computing base — the file said so in its own
+doc comment. It existed for compatibility with protocol v0.2, a version with no
+implementations and no users. So the codebase carried 115 lines of TCB, an `att_seal`
+mechanism, and a mode-mixing rule (`RESTATE`-after-`RESTRICT` was prohibited, because
+restating an intersection would drag semantic comparison back in) in order to be compatible
+with nothing. It is gone: `CapabilityLeq`, `constraintLeq`, `att_seal`, `checkModeMixing`,
+step 7's RESTATE branch, and the `mode` parameter on the delegations API. A chain element
+below the root that carries its own capability set is now rejected at chain build.
 
-`CapabilitiesSubset` calls `CapabilityLeq`
-([`internal/credential/capability_leq.go`](internal/credential/capability_leq.go)) — 115
-lines that must decide, for every pair of constraint kinds, whether the child is at least as
-tight as the parent. Whether one URI covers another. Whether a `nil` budget window means
-"unbounded" (it does, for a parent) or "broader than the parent's" (it does, for a child).
-Whether an unmodeled constraint type is safe to permit (it is not; the `default:` branch
-returns false). Every one of those decisions is load-bearing: get one wrong and a child
-mints authority its parent never held.
+### The precise claim
 
-The code is careful. It fails closed on unknown types, it fails closed on URIs that fail
-canonicalization, it requires `delegation_depth` to attenuate strictly while everything else
-attenuates non-strictly. It is also, unavoidably, **trusted computing base** — and the file
-says so in its own doc comment rather than leaving it to be discovered.
+**Chain validation performs no set-containment comparison.** Every hop is a caveat block, so
+there is no capability set below the root to compare against anything, and the per-hop
+invariants are scalar: `child.exp <= parent.exp`, `child.nbf >= parent.nbf`,
+`0 <= child.dl < parent.dl`, `child.iss == parent.aud`, `child.prf == parent.CID`. Integers
+and strings.
 
-**RESTRICT** deletes the problem. The block carries no capability set, so step 7 has nothing
-to compare and skips the hop entirely:
+**That is not the same as "there is no comparison."** An earlier version of this document
+said the attack surface was "not reduced; it is absent," with the only residue being a forged
+Ed25519 signature or a SHA-256 collision on `prf`. That was wrong twice over, and both errors
+are worth keeping on the page.
 
-```go
-for i := 0; i+1 < len(chain.Elements); i++ {
-    child := chain.Elements[i]
-    if child.Mode != delegation.ModeRestate {
-        continue   // RESTRICT: escalation-free by construction, nothing to check
-    }
-    ...
-}
-```
+*First*, comparison did not leave the system; it moved. `CanonicalizeURI` and `URICovers`
+still run — on the RESTRICT path, on every verification, at step 8 — and `URICovers` is
+exactly the positional segment-matching logic whose subtleties made `CapabilityLeq`
+dangerous. `evaluateConstraint` still dispatches nine constraint types across eight case
+arms, each with its own semantics and its own way to be wrong. What removing RESTATE bought
+is that none of this runs *per hop against a parent*: it runs once, at authorization, against
+the root's grant and the caveats on the path. Fewer places to be wrong, and a failure is a
+denied request rather than a widened credential. That is a real and worthwhile reduction. It
+is not an absence.
 
-The invariants that make this safe are all structural checks on scalars, done in step 2:
-`child.exp <= parent.exp`, `child.nbf >= parent.nbf`, `child.dl < parent.dl`,
-`child.iss == parent.aud`, `child.prf == parent.CID`. Integer and string comparisons, no
-semantics. Authority is computed at invocation time as the root's capability set
-intersected with every caveat on the path — and because step 8 walks *every block in the
-chain*, a child cannot escape a parent's caveat by omitting it.
-
-The distinction that matters: in RESTATE, a malicious delegator writes a broader capability
-into a field and the verifier's job is to *notice*. In RESTRICT there is no such field, so
-the verifier has no such job.
-
-That removes one class of attack. It does not leave nothing behind, and an earlier version of
-this document claimed it did — "the attack surface is not reduced; it is absent," with the
-only residue being a forged Ed25519 signature or a SHA-256 collision on `prf`. That was
-wrong, and the shape of the error is worth keeping on the page.
-
-RESTRICT replaces capability *comparison* with a set of scalar invariants. A comparison can
-be subtly wrong; a scalar invariant can be flatly missing — and a missing invariant does not
-present as an attack surface at all until someone probes for it, because there is no code to
-audit. `dl` had a ceiling and no floor: `child.dl < parent.dl` was enforced at verification,
-`child.dl >= 0` was enforced only in the minting path, and a block at `dl=-1` under a parent
+*Second*, scalar invariants have their own failure mode, and it is worse to audit than a
+faulty comparison. A comparison can be subtly wrong; a scalar invariant can be flatly
+missing — and a missing invariant does not present as an attack surface at all, because there
+is no code to look at. `dl` had a ceiling and no floor: `child.dl < parent.dl` was enforced at
+verification, `child.dl >= 0` only in the minting path, and a block at `dl=-1` under a parent
 at `dl=0` verified end to end (F14 in [SECURITY_AUDIT.md](SECURITY_AUDIT.md)). No comparison
-code was involved, nothing was forged, and no collision was needed.
+code was involved. Nothing was forged. No collision was needed.
 
-The defensible claim is narrower: RESTRICT makes the verifier's obligations *enumerable* —
-a handful of scalar checks in place of a semantic subset test. Enumerable is a real
-advantage, and it is worth only as much as the enumeration is complete and enforced at every
-point the object is admitted.
+The defensible claim is narrower than the one this document used to make: RESTRICT makes the
+verifier's per-hop obligations **enumerable** — a handful of scalar checks in place of a
+semantic subset test. Enumerable is a real advantage, and it is worth exactly as much as the
+enumeration is complete and enforced at every point an object is admitted, which is the
+lesson F14 and F16 paid for.
+
+### What the closed caveat vocabulary costs
+
+RESTRICT can only narrow along axes the vocabulary names: `time_window`,
+`resource_restrict`, `action_restrict`, `method_restrict`, `param_limit`, `max_calls`,
+`budget`, `parameter_schema`, `delegation_depth`. Anything else is inexpressible until the
+vocabulary grows, which is a version bump. Biscuit answers the same question with Datalog and
+can express restrictions nobody anticipated. That is a genuine expressiveness advantage and
+it is not free on the other side — a Datalog evaluator is a larger trusted computing base
+than a closed enum with a fail-closed `default:` branch. Which side of that trade is right
+depends on whether you would rather be unable to express a policy or unable to be sure what a
+policy expresses. This design picks the first. It is an engineering tradeoff, not a
+discovery.
+
+`action_restrict` is the evidence that the closed vocabulary has a real cost and that the
+cost is paid in version bumps. Until it was added, `ctx.Action` was compared exactly once in
+the whole verifier — against the root's `can` — so a root holding both `resource/read` and
+`resource/write` over one URI space could not delegate read-only. Read-only delegation is the
+most ordinary attenuation there is, and RESTRICT simply could not say it.
 
 Eight adversarial vectors in
 [`internal/verify/adversarial_test.go`](internal/verify/adversarial_test.go) attack RESTRICT
 with a real signing key and arbitrary forged payloads — depth escalation, depth *de-escalation*
 below zero, expiry escalation, `nbf` regression, issuer/audience linkage break, caveat removal
 by a child, revoked-credential replay, unknown-constraint smuggling. Each asserts the specific
-step and error code that caught it. None target RESTATE.
+step and error code that caught it.
 
 The negative-depth vector was added after an external audit exploited it: the original seven
-probed `dl` upward only, and the verifier bounded it only from above, so `dl=-1` under a
-parent at `dl=0` verified end to end. That is recorded as F14 in
-[SECURITY_AUDIT.md](SECURITY_AUDIT.md), along with the withdrawal of the claim it falsified.
-
-**The uncomfortable part.** ADTP ships both. RESTATE exists for compatibility with protocol
-v0.2 — a version with no implementations and no users. So the codebase carries 115 lines of
-trusted computing base, an entire `att_seal` mechanism, and a mode-mixing rule
-(`RESTATE`-after-`RESTRICT` is prohibited, because restating an intersection would drag
-semantic comparison back in) in order to be compatible with nothing. That is the single
-clearest thing this implementation revealed, and it is addressed under "what I would do
-differently."
-
-### On `att_seal`
-
-RESTATE hops carry a second signature over the canonicalized capability set. It is worth
-being precise about what it does, because an earlier version of the spec overclaimed it and
-the correction is instructive.
-
-The seal defends against **serialization differentials**: the gap between the bytes that
-were signed and the structure the application parsed — duplicate-key smuggling, encoding
-divergence. Forcing the verifier to recompute a digest over the *parsed, canonicalized*
-capabilities and match it against the sealed digest closes that gap.
-
-It does **not** extend the trust model, because the seal signer is the hop issuer — the same
-key that signed the token. A malicious issuer signs escalated capabilities and then signs a
-seal over them just as willingly. The v0.2 claim that `att_seal` made delegation integrity
-sound independently of `CapabilityLeq` was withdrawn, and
-[`internal/credential/attseal.go`](internal/credential/attseal.go) states the narrower
-property in its doc comment. RESTRICT needs no seal at all, because it commits to no
-capability set.
+probed `dl` upward only, and the verifier bounded it only from above. That is recorded as F14
+in [SECURITY_AUDIT.md](SECURITY_AUDIT.md), along with the withdrawal of the claim it
+falsified.
 
 ## Why did:key, not did:web
 
@@ -264,7 +244,7 @@ nothing to break.
 
 The protocol was designed as a research disclosure, and it covers considerably more than has
 been built. This repository is a reference implementation of the core: identity, chains,
-RESTRICT and RESTATE delegation, verification, revocation, audit.
+RESTRICT delegation, verification, revocation, audit.
 
 Designed and specified, not implemented:
 
@@ -293,12 +273,14 @@ description of this binary.
 
 ## What I would do differently
 
-**Not ship RESTATE.** It is the only reason a capability-comparison function exists in the
-trusted computing base, and it buys compatibility with a protocol version that never had an
-implementation. Removing it would delete `CapabilityLeq`, the `att_seal` machinery, the
-mode-mixing rule, and roughly a third of the conceptual surface — and would let the central
-claim be stated without a qualifier. The lesson generalizes: a compatibility mode for a
-predecessor with no users is not compatibility, it is a second system to secure.
+**Not have shipped RESTATE in the first place.** It was the only reason a
+capability-comparison function existed in the trusted computing base, and it bought
+compatibility with a protocol version that never had an implementation. It is now removed —
+`CapabilityLeq`, the `att_seal` machinery, the mode-mixing rule, and roughly a third of the
+conceptual surface went with it. The point of leaving this here is that it should never have
+been written: a compatibility mode for a predecessor with no users is not compatibility, it
+is a second system to secure. The cost was paid in review attention for two releases before
+anyone deleted it.
 
 **Stop overloading risk tiers.** `RiskTier` currently answers two unrelated questions: how
 sensitive is this resource, and what should happen when the revocation store is unreachable.

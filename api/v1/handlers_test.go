@@ -5,6 +5,7 @@ package v1
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"io"
@@ -103,7 +104,7 @@ func TestHandlerStoreFailures(t *testing.T) {
 		fs.failRegister = true
 		defer func() { fs.failRegister = false }()
 		code := post(t, srv.URL+"/v1/delegations", adtp.DelegateRequest{
-			ParentCID: issued.CID, AudienceDID: "did:key:zB", Mode: "restrict",
+			ParentCID: issued.CID, AudienceDID: "did:key:zB",
 			Caveats: adtp.Caveats{credential.NewTimeWindow(1, 1<<40)}, DepthLeft: 4,
 		}, nil)
 		if code != http.StatusInternalServerError {
@@ -223,7 +224,7 @@ func TestAPIFullFlow(t *testing.T) {
 	// 3. Delegate (RESTRICT) from the root to agent B.
 	var deleg adtp.DelegateResponse
 	if code := post(t, srv.URL+"/v1/delegations", adtp.DelegateRequest{
-		ParentCID: rootCID, AudienceDID: agentB.DID, Mode: "restrict",
+		ParentCID: rootCID, AudienceDID: agentB.DID,
 		Caveats:   adtp.Caveats{credential.NewTimeWindow(now-100, now+3600)},
 		DepthLeft: 4, ExpSeconds: 3600,
 	}, &deleg); code != http.StatusCreated {
@@ -322,7 +323,7 @@ func TestAPIErrorCases(t *testing.T) {
 	})
 	t.Run("delegate unknown parent", func(t *testing.T) {
 		code := post(t, srv.URL+"/v1/delegations", adtp.DelegateRequest{
-			ParentCID: "bafkreimissing", AudienceDID: "did:key:zB", Mode: "restrict",
+			ParentCID: "bafkreimissing", AudienceDID: "did:key:zB",
 			Caveats: adtp.Caveats{credential.NewTimeWindow(1, 2)}, DepthLeft: 1,
 		}, nil)
 		if code != http.StatusNotFound {
@@ -362,9 +363,12 @@ func TestAPIErrorCases(t *testing.T) {
 	})
 }
 
-func TestAPIRestateDelegation(t *testing.T) {
+// RESTATE is removed. The API has no mode parameter, and a "capabilities" field
+// on a delegation request is not honoured: every hop is a RESTRICT block whose
+// only effect is to add caveats.
+func TestAPIDelegationIsAlwaysRestrict(t *testing.T) {
 	srv := newTestServer(t)
-
+	now := time.Now().Unix()
 	var health adtp.HealthResponse
 	get(t, srv.URL+"/health", &health)
 
@@ -374,18 +378,34 @@ func TestAPIRestateDelegation(t *testing.T) {
 
 	var issued adtp.IssueCredentialResponse
 	post(t, srv.URL+"/v1/credentials", adtp.IssueCredentialRequest{
-		AgentDID:     agentA.DID,
-		Capabilities: []adtp.Capability{mustCap(t, credential.CanToolInvoke, "tool://server/*")},
-		ExpSeconds:   3600,
+		AgentDID: agentA.DID,
+		Capabilities: []adtp.Capability{
+			mustCap(t, credential.CanAgentDelegate, "agent://p/a",
+				credential.DelegationDepthConstraint{Type: credential.ConstraintDelegationDepth, Max: 5}),
+			mustCap(t, credential.CanToolInvoke, "tool://server/*"),
+		},
+		ExpSeconds: 3600,
 	}, &issued)
 
-	// RESTATE a covered subset.
 	var deleg adtp.DelegateResponse
 	if code := post(t, srv.URL+"/v1/delegations", adtp.DelegateRequest{
-		ParentCID: issued.CID, AudienceDID: agentB.DID, Mode: "restate",
-		Capabilities: []adtp.Capability{mustCap(t, credential.CanToolInvoke, "tool://server/search")},
+		ParentCID: issued.CID, AudienceDID: agentB.DID,
+		Caveats: adtp.Caveats{credential.NewTimeWindow(now-100, now+3600)}, DepthLeft: 4,
 	}, &deleg); code != http.StatusCreated {
-		t.Fatalf("restate delegate = %d", code)
+		t.Fatalf("delegate = %d", code)
+	}
+
+	// The result is a RESTRICT block: it carries caveats, not a capability set.
+	rawBlock, err := base64.RawURLEncoding.DecodeString(deleg.Raw)
+	if err != nil {
+		t.Fatalf("decode raw: %v", err)
+	}
+	block, err := credential.ParseRestrictBlock(rawBlock)
+	if err != nil {
+		t.Fatalf("delegation is not a RESTRICT block: %v", err)
+	}
+	if len(block.Cav) == 0 {
+		t.Error("delegation carries no caveats")
 	}
 
 	var vResp adtp.VerifyResponse
@@ -393,15 +413,7 @@ func TestAPIRestateDelegation(t *testing.T) {
 		ChainCIDs: []string{deleg.CID}, Action: credential.CanToolInvoke, Resource: "tool://server/search",
 	}, &vResp)
 	if !vResp.Authorized {
-		t.Errorf("restate chain not authorized: %+v", vResp)
-	}
-
-	// RESTATE escalation is forbidden.
-	if code := post(t, srv.URL+"/v1/delegations", adtp.DelegateRequest{
-		ParentCID: issued.CID, AudienceDID: agentB.DID, Mode: "restate",
-		Capabilities: []adtp.Capability{mustCap(t, credential.CanResourceWrite, "resource://db/x")},
-	}, nil); code != http.StatusForbidden {
-		t.Errorf("escalation code = %d, want 403", code)
+		t.Errorf("restrict chain not authorized: %+v", vResp)
 	}
 }
 
@@ -472,7 +484,7 @@ func TestAPIDelegateNonDelegableParent(t *testing.T) {
 	}, &issued)
 
 	code := post(t, srv.URL+"/v1/delegations", adtp.DelegateRequest{
-		ParentCID: issued.CID, AudienceDID: "did:key:zB", Mode: "restrict",
+		ParentCID: issued.CID, AudienceDID: "did:key:zB",
 		Caveats: adtp.Caveats{credential.NewTimeWindow(1, 1<<40)}, DepthLeft: 1,
 	}, nil)
 	if code != http.StatusBadRequest {
@@ -516,12 +528,12 @@ func TestAPIMultiHopDelegation(t *testing.T) {
 	caveats := adtp.Caveats{credential.NewTimeWindow(now-100, now+3600)}
 	var hop1 adtp.DelegateResponse
 	post(t, srv.URL+"/v1/delegations", adtp.DelegateRequest{
-		ParentCID: issued.CID, AudienceDID: b, Mode: "restrict", Caveats: caveats, DepthLeft: 4,
+		ParentCID: issued.CID, AudienceDID: b, Caveats: caveats, DepthLeft: 4,
 	}, &hop1)
 	// Delegate again from the RESTRICT block (exercises the block-parent path).
 	var hop2 adtp.DelegateResponse
 	if code := post(t, srv.URL+"/v1/delegations", adtp.DelegateRequest{
-		ParentCID: hop1.CID, AudienceDID: c, Mode: "restrict", Caveats: caveats, DepthLeft: 3,
+		ParentCID: hop1.CID, AudienceDID: c, Caveats: caveats, DepthLeft: 3,
 	}, &hop2); code != http.StatusCreated {
 		t.Fatalf("second hop = %d", code)
 	}
@@ -565,31 +577,38 @@ func TestAPIDelegateValidation(t *testing.T) {
 		ExpSeconds: 3600,
 	}, &root)
 
-	t.Run("invalid mode", func(t *testing.T) {
+	t.Run("missing audience", func(t *testing.T) {
 		if code := post(t, srv.URL+"/v1/delegations", adtp.DelegateRequest{
-			ParentCID: root.CID, AudienceDID: b, Mode: "teleport", DepthLeft: 4,
+			ParentCID: root.CID, DepthLeft: 4,
+			Caveats: adtp.Caveats{credential.NewTimeWindow(now-100, now+3600)},
 		}, nil); code != http.StatusBadRequest {
 			t.Errorf("code = %d, want 400", code)
 		}
 	})
 
-	t.Run("restate without capabilities", func(t *testing.T) {
+	// Section 8.2: a hop that carries no caveat restricts nothing.
+	t.Run("no caveats", func(t *testing.T) {
 		if code := post(t, srv.URL+"/v1/delegations", adtp.DelegateRequest{
-			ParentCID: root.CID, AudienceDID: b, Mode: "restate",
+			ParentCID: root.CID, AudienceDID: b, DepthLeft: 4,
 		}, nil); code != http.StatusBadRequest {
 			t.Errorf("code = %d, want 400", code)
 		}
 	})
 
-	t.Run("restate from a restrict block", func(t *testing.T) {
-		var block adtp.DelegateResponse
-		post(t, srv.URL+"/v1/delegations", adtp.DelegateRequest{
-			ParentCID: root.CID, AudienceDID: b, Mode: "restrict",
-			Caveats: adtp.Caveats{credential.NewTimeWindow(now-100, now+3600)}, DepthLeft: 4,
-		}, &block)
+	t.Run("depth not reduced", func(t *testing.T) {
 		if code := post(t, srv.URL+"/v1/delegations", adtp.DelegateRequest{
-			ParentCID: block.CID, AudienceDID: b, Mode: "restate",
-			Capabilities: []adtp.Capability{mustCap(t, credential.CanToolInvoke, "tool://server/search")},
+			ParentCID: root.CID, AudienceDID: b, DepthLeft: 5,
+			Caveats: adtp.Caveats{credential.NewTimeWindow(now-100, now+3600)},
+		}, nil); code != http.StatusBadRequest {
+			t.Errorf("code = %d, want 400", code)
+		}
+	})
+
+	// The floor half of the depth bound (F14): dl=-1 satisfies dl < parent.dl.
+	t.Run("negative depth", func(t *testing.T) {
+		if code := post(t, srv.URL+"/v1/delegations", adtp.DelegateRequest{
+			ParentCID: root.CID, AudienceDID: b, DepthLeft: -1,
+			Caveats: adtp.Caveats{credential.NewTimeWindow(now-100, now+3600)},
 		}, nil); code != http.StatusBadRequest {
 			t.Errorf("code = %d, want 400", code)
 		}
@@ -618,7 +637,7 @@ func TestAPIVerifyKeyNotHeld(t *testing.T) {
 	// the daemon cannot custodially sign for an agent whose key it does not hold.
 	var hop adtp.DelegateResponse
 	post(t, srv.URL+"/v1/delegations", adtp.DelegateRequest{
-		ParentCID: issued.CID, AudienceDID: "did:key:zStranger", Mode: "restrict",
+		ParentCID: issued.CID, AudienceDID: "did:key:zStranger",
 		Caveats: adtp.Caveats{credential.NewTimeWindow(now-100, now+3600)}, DepthLeft: 4,
 	}, &hop)
 
@@ -673,7 +692,7 @@ func TestAPIErrorSanitization(t *testing.T) {
 
 	var errResp adtp.ErrorResponse
 	code := post(t, srv.URL+"/v1/delegations", adtp.DelegateRequest{
-		ParentCID: issued.CID, AudienceDID: "did:key:zB", Mode: "restrict",
+		ParentCID: issued.CID, AudienceDID: "did:key:zB",
 		Caveats: adtp.Caveats{credential.NewTimeWindow(1, 2)}, DepthLeft: 1,
 	}, &errResp)
 	if code != http.StatusBadRequest {

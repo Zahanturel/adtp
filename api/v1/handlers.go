@@ -255,18 +255,7 @@ func handleDelegate(svc *Service) http.HandlerFunc {
 			return
 		}
 
-		mode := req.Mode
-		if mode == "" {
-			mode = "restrict"
-		}
-		switch mode {
-		case "restrict":
-			svc.delegateRestrict(r.Context(), w, req, parentRaw)
-		case "restate":
-			svc.delegateRestate(r.Context(), w, req, parentRaw)
-		default:
-			writeErr(w, http.StatusBadRequest, adtp.CodeMalformed, "mode must be 'restrict' or 'restate'")
-		}
+		svc.delegateRestrict(r.Context(), w, req, parentRaw)
 	}
 }
 
@@ -292,38 +281,6 @@ func (svc *Service) delegateRestrict(ctx context.Context, w http.ResponseWriter,
 	}
 	svc.log().Info("restrict delegation issued", "cid", cid, "audience", req.AudienceDID)
 	writeJSON(w, http.StatusCreated, adtp.DelegateResponse{CID: cid, Raw: base64.RawURLEncoding.EncodeToString(raw)})
-}
-
-func (svc *Service) delegateRestate(ctx context.Context, w http.ResponseWriter, req adtp.DelegateRequest, parentRaw []byte) {
-	u, err := asUCAN(parentRaw)
-	if err != nil {
-		writeErr(w, http.StatusBadRequest, adtp.CodeMalformed, "RESTATE requires a UCAN parent")
-		return
-	}
-	if len(req.Capabilities) == 0 {
-		writeErr(w, http.StatusBadRequest, adtp.CodeMalformed, "capabilities are required for RESTATE")
-		return
-	}
-	if !credential.CapabilitiesSubset(req.Capabilities, u.Payload.Att) {
-		writeErr(w, http.StatusForbidden, adtp.CodeDenied, "restated capabilities exceed the parent")
-		return
-	}
-	key, err := svc.Keys.Load(u.Payload.Aud)
-	if err != nil {
-		writeErr(w, http.StatusForbidden, adtp.CodeDenied, "delegator key not held by this daemon")
-		return
-	}
-	token, err := credential.CreateRestateHop(u, req.AudienceDID, req.Capabilities, key)
-	if err != nil {
-		svc.failErr(w, http.StatusBadRequest, adtp.CodeMalformed, "invalid delegation", err)
-		return
-	}
-	cid := svc.storeAndRegister(ctx, w, []byte(token))
-	if cid == "" {
-		return
-	}
-	svc.log().Info("restate delegation issued", "cid", cid, "audience", req.AudienceDID)
-	writeJSON(w, http.StatusCreated, adtp.DelegateResponse{CID: cid, Raw: base64.RawURLEncoding.EncodeToString([]byte(token))})
 }
 
 // storeAndRegister stores a delegation, registers its chain, and audits it,
@@ -644,10 +601,6 @@ func parentRef(raw []byte, cid string) (credential.DelegationParent, string, err
 		return credential.DelegationParent{}, "", err
 	}
 	return parent, u.Payload.Aud, nil
-}
-
-func asUCAN(raw []byte) (*credential.UCAN, error) {
-	return credential.ParseUCAN(string(raw))
 }
 
 func audienceOf(raw []byte) (string, error) {

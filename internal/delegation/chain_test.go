@@ -177,7 +177,7 @@ func TestBuildChainBranchingUnsupported(t *testing.T) {
 	}
 }
 
-func TestBuildChainModeMixingViolation(t *testing.T) {
+func TestBuildChainRejectsNonRootToken(t *testing.T) {
 	store := NewMemoryProofStore()
 	root, rootCID, _, agentKey := delegableRoot(t, store)
 	parent, err := ParentFromUCAN(root, rootCID)
@@ -190,8 +190,9 @@ func TestBuildChainModeMixingViolation(t *testing.T) {
 		t.Fatalf("DelegateRestrict: %v", err)
 	}
 
-	// A RESTATE hop (UCAN with one prf) whose parent is the RESTRICT block:
-	// RESTATE after RESTRICT is prohibited.
+	// A UCAN carrying a prf is a non-root token. RESTATE is gone, so an element
+	// below the root that carries its own capability set is rejected outright
+	// rather than compared against its parent.
 	restateToken, err := credential.CreateUCAN(credential.UCANPayload{
 		Iss: subDID, Aud: "did:key:zLeaf",
 		Att: []credential.Capability{mustCap(t, credential.CanToolInvoke, "tool://server/search")},
@@ -203,8 +204,8 @@ func TestBuildChainModeMixingViolation(t *testing.T) {
 	}
 	leafCID := store.Put([]byte(restateToken))
 
-	if _, err := BuildChain(context.Background(), leafCID, store, DefaultMaxDepth); !errors.Is(err, ErrModeMixing) {
-		t.Errorf("err = %v, want ErrModeMixing", err)
+	if _, err := BuildChain(context.Background(), leafCID, store, DefaultMaxDepth); !errors.Is(err, ErrNonRootToken) {
+		t.Errorf("err = %v, want ErrNonRootToken", err)
 	}
 }
 

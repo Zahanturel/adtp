@@ -63,22 +63,24 @@ cannot widen, and a list of caveats:
 
 The leaf's authority is the root credential's capability set **intersected with every
 caveat on the path**, evaluated when the request arrives. A block can only add caveats.
-There is no field in which to write a broader permission, so there is no subset check to
-get wrong, and the verifier contains no capability-comparison code on this path
-([`internal/verify/steps.go`](internal/verify/steps.go) step 7 skips it entirely for
-RESTRICT hops). Escalating requires forging an Ed25519 signature or finding a SHA-256
-collision on `prf`.
+There is no field in which to write a broader permission, so **chain validation performs no
+set-containment comparison** — there is no capability set below the root to compare against
+anything.
 
-**This applies to RESTRICT, not to the whole system.** ADTP also has a compatibility mode,
-RESTATE, where the child does restate its capabilities and the verifier does run a
-comparison — `CapabilityLeq` in
-[`internal/credential/capability_leq.go`](internal/credential/capability_leq.go), 115 lines
-of type-switched semantic comparison. In RESTATE mode that function **is** trusted
-computing base, exactly like the approach above. It is reachable today: `POST
-/v1/delegations` with `"mode":"restate"`. It fails closed on constraint types it does not
-model and on URIs that fail canonicalization, and `RESTATE` after `RESTRICT` is structurally
-prohibited, but none of that makes it structural. Prefer RESTRICT, which is the default when
-`mode` is omitted. See [DESIGN.md](DESIGN.md) for why both exist.
+Be precise about what that does and does not mean. Comparison did not leave the system; it
+moved. `CanonicalizeURI` and `URICovers` still run at authorization
+([`internal/verify/steps.go`](internal/verify/steps.go) step 8), on every verification, and
+`evaluateConstraint` still dispatches nine constraint types. What the structure removes is
+per-hop semantic comparison against a parent. The difference is where a mistake lands: in
+the usual design a comparison bug widens a credential permanently; here a bug in `URICovers`
+denies a request or authorizes one resource wrongly, against a grant the platform wrote and
+signed. Fewer places to be wrong, and a smaller blast radius when you are. Not zero.
+
+Until v0.2 this was qualified further, because a second mode (RESTATE) did restate
+capabilities and did run a 115-line comparison function. That mode is removed as of v0.2.0,
+along with `CapabilityLeq`, the `att_seal` machinery, and the `mode` parameter on the
+delegations API. There is one delegation mode. See [DESIGN.md](DESIGN.md) for what its
+removal bought and what it cost.
 
 ## How it works
 
@@ -131,7 +133,7 @@ $ curl ... /v1/credentials -d '{"agent_did":"<orchestrator>", "capabilities":[..
 root cid    : bafkreigcd2iejzrk6v2me6gcytpwvvcsbqamoojsg5bvmlewfzgdg7u5my
 
 $ curl ... /v1/delegations -d '{"parent_cid":"<root>","audience_did":"<sub-agent>",
-                                "mode":"restrict","depth_left":2,
+                                "depth_left":2,
                                 "caveats":[{"type":"resource_restrict",
                                             "resource":"tool://search.example/web"}]}'
 delegated   : bafkreifoqss3coqihrcmx7mqo7dgackh7glvok2nzctqv3qz3scsl5favu
@@ -253,7 +255,7 @@ auth -X POST localhost:8080/v1/credentials -d '{
 
 auth -X POST localhost:8080/v1/delegations -d '{
   "parent_cid":"<root-cid>","audience_did":"<sub-agent-did>",
-  "mode":"restrict","depth_left":2,
+  "depth_left":2,
   "caveats":[{"type":"resource_restrict","resource":"tool://search.example/web"}]}'
 
 auth -X POST localhost:8080/v1/verify -d '{
@@ -304,7 +306,7 @@ it is why those caveats are documented as present-but-unenforced in
 | `/v1/agents` | POST | yes | Register an agent; daemon generates its DID and key |
 | `/v1/agents/{did}` | GET | yes | Look up an agent's lifecycle state |
 | `/v1/credentials` | POST | yes | Issue a root credential |
-| `/v1/delegations` | POST | yes | Delegate (`restrict` default, or `restate`) |
+| `/v1/delegations` | POST | yes | Delegate: add caveats to a parent credential |
 | `/v1/verify` | POST | yes | Run the 13-step pipeline against an action and resource |
 | `/v1/revoke` | POST | yes | Post a revocation; `COMPROMISED` also cascades |
 | `/v1/revocation/list` | GET | **no** | Signed revocation list |
@@ -324,7 +326,7 @@ This is a reference implementation of a protocol design. It is not production so
 has no users, no released version, and no stability guarantees; the wire format may change
 without a migration path.
 
-**Implemented:** did:key/Ed25519 identity; UCAN credential chains; RESTRICT and RESTATE
+**Implemented:** did:key/Ed25519 identity; UCAN credential chains; RESTRICT
 delegation; the 13-step verification pipeline; signed revocation entries and lists, with
 `COMPROMISED` cascade and registration-index reconciliation; a hash-linked audit log; OIDC
 bearer auth (RS256 against a JWKS URL); batched audit export to an HTTP webhook; in-memory
