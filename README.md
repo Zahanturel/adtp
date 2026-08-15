@@ -468,6 +468,6 @@ trusted to act for every agent in the key store.
 - [SECURITY_AUDIT.md](SECURITY_AUDIT.md) — an audit of this implementation against its own
   claims, including what is still open.
 - [SECURITY.md](SECURITY.md) — reporting a vulnerability.
-- [CONTRIBUTING.md](CONTRIBUTING.md), [CLA.md](CLA.md).
+- [CONTRIBUTING.md](CONTRIBUTING.md) — DCO sign-off (`git commit -s`); no CLA.
 
 Licensed under [Apache 2.0](LICENSE).

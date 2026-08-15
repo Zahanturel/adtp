@@ -2,9 +2,11 @@
 
 Contributions are welcome. Before submitting a pull request, please review the following.
 
-## Contributor License Agreement
+## Sign your commits (DCO)
 
-All contributors must sign the [Contributor License Agreement](CLA.md) before their contributions can be merged. CLA signing is automated: CLA Assistant will prompt you with a comment on your first pull request. Simply reply with the requested confirmation to sign.
+Sign off every commit with `git commit -s`, which appends a `Signed-off-by:` line certifying the [Developer Certificate of Origin](https://developercertificate.org/) — that you wrote the contribution or otherwise have the right to submit it under Apache 2.0.
+
+That is the whole requirement. There is no CLA. This project previously asked contributors to sign one; it was removed in v0.2.0 because a CLA on a solo Apache-2.0 project with no company behind it is friction with no purpose. A CLA exists to enable relicensing or to assemble a patent position, and there is neither here. Apache 2.0 already grants a patent licence from contributors, which is the protection that actually matters.
 
 ## Setup
 
@@ -37,7 +39,9 @@ Requires Go 1.22+ (for method+path routing in `net/http`).
 ## Pull requests
 
 - One logical change per PR.
+- Sign off your commits (`git commit -s`).
 - Include tests for new functionality.
+- A new test must be run against the unfixed code and observed to **fail** before its passing run means anything. See SECURITY_AUDIT.md F19 for why this is stated as a rule.
 - Run `go test ./...` and `go vet ./...` before submitting.
 - CI must pass: unit tests, lint (`golangci-lint`), and E2E.
 - For protocol changes, update [PROTOCOL.md](docs/PROTOCOL.md) and [CAPABILITIES.md](CAPABILITIES.md).
@@ -61,7 +65,7 @@ internal/
   identity/         did:key generation and Ed25519 key management
   credential/       UCAN parsing, capability model, RESTRICT blocks
   delegation/       Delegation chain construction
-  verify/           13-step verification pipeline
+  verify/           verification pipeline (13 spec steps; 9 can deny)
   revocation/       Cascade revocation, registration index, reconciliation
   signing/          JCS canonicalization, canonical signing discipline
   audit/            Audit log interface
