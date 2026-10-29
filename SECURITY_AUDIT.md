@@ -460,6 +460,25 @@ platform key, but `MemoryRevocationCache.Revoke` and `PostgresStore.Revoke` are 
 would accept one. `UpdateFromList` is the safe path — it takes an explicit issuer key.
 *Open.*
 
+**F22 — `ListCredentials` orders by a whole-second timestamp, so same-second writes have
+undefined order.** *(Correctness finding, not a vulnerability; noticed while fixing F21.)*
+`PostgresStore.ListCredentials` issues `ORDER BY created_at`
+([`store/postgres/store.go:150`](store/postgres/store.go#L150)), and `created_at` is a bigint
+written as `time.Now().Unix()` — whole seconds. Two credentials stored in the same second
+have no defined relative order, and PostgreSQL is free to return them either way between
+calls. `MemoryStore.ListCredentials` returns insertion order from `credOrder`
+([`store/memory/store.go:124`](store/memory/store.go#L124)), which is always well-defined, so
+the two backends disagree on exactly the input that is easiest to produce: credentials minted
+in a loop.
+
+This is the same family as F21 — an ordering guarantee that holds under one backend and not
+the other — but the fix is different in kind. F21 needed only an explicit collation; this
+needs a tiebreak the schema does not currently carry, so it is recorded rather than patched.
+`ORDER BY created_at, cid COLLATE "C"` would make it deterministic and match byte order on
+the CID, though it still would not reproduce insertion order; agreeing on *insertion* order
+across both backends would need a monotonic sequence column like the one `audit_log` already
+has. No test covers the ambiguous case today. *Open.*
+
 ### Also noted
 
 - **Zero `TODO`/`FIXME`/`XXX`/`HACK` in the codebase.** The one deferred feature is declared
