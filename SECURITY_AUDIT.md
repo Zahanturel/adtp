@@ -353,6 +353,32 @@ working copy under audit. *Resolved:* both are present on `main`
 **F12 — `golang.org/x/time` was a direct dependency marked `// indirect`.** *Resolved:*
 promoted in `go.mod`.
 
+**F21 — `KeyStore.List` ordered by database collation, not byte order.** *(Correctness
+finding, not a vulnerability; found by the scheduled CI run of 2026-10-27.)*
+`identity.MemoryKeyStore.List` sorts with `sort.Strings` — byte order — while
+`store/postgres/keystore.go` issued `ORDER BY did`, which uses the database's collation. DIDs
+are mixed-case base58, and a linguistic collation such as `en_US.utf8` (the default in the
+`postgres:16` image CI uses) folds case: it puts `...icgd` before `...iHJS`, where byte order
+puts `'H'` (0x48) before `'c'` (0x63). The two backends therefore returned different orders
+for the same key set, behind an interface whose doc comment promised "ascending order".
+
+`TestPostgresKeyStoreList` generates its DIDs randomly, so it only caught this when the
+generated pair happened to differ in case at the deciding position — it passed on 2026-10-20
+and failed on 2026-10-27 with no change to the code in between. The fix was not to relax the
+test: a divergence that appears under one backend and not the other is the defect.
+
+*Resolved:* `ORDER BY did COLLATE "C"`, which makes the byte ordering explicit and
+backend-independent. `FindDescendants` received the same treatment for
+`ORDER BY credential_cid`; there it is latent rather than live, because CIDs are lowercase
+base32 (`bafkrei...`) and byte order and `en_US.utf8` agree on that alphabet — stated here
+rather than glossed, per F19's rule about tests that cannot discriminate.
+`RevocationEntries` was left alone deliberately: its `ORDER BY` exists to drive `DISTINCT ON`,
+which groups by equality rather than by collation order, so the collation cannot change which
+entry wins per subject — and `MemoryRevocationCache.Entries` returns map-iteration order, so
+there is no cross-backend ordering guarantee there to preserve.
+`TestPostgresKeyStoreListIsByteOrdered` pins the behaviour with the DID pair from the CI
+failure, and was observed to fail against the unfixed query.
+
 ### Withdrawn
 
 Two findings were wrong, and both failed the same way: an empirical claim was asserted

@@ -173,10 +173,16 @@ func (s *PostgresStore) Register(ctx context.Context, credentialCID string, chai
 	return tx.Commit(ctx)
 }
 
+// FindDescendants returns the credentials whose chain contains cid, excluding
+// cid itself, in ascending byte order. The COLLATE "C" matches
+// revocation.MemoryRegistrationIndex.FindDescendants, which sorts with
+// sort.Strings. CIDs are lowercase base32 ("bafkrei..."), an alphabet on which
+// byte order and en_US.utf8 agree, so this is a guarantee made structural
+// rather than a bug fixed.
 func (s *PostgresStore) FindDescendants(ctx context.Context, cid string) ([]string, error) {
 	rows, err := s.pool.Query(ctx,
 		`SELECT credential_cid FROM registration_index
-		 WHERE chain_cid = $1 AND credential_cid <> $1 ORDER BY credential_cid`, cid)
+		 WHERE chain_cid = $1 AND credential_cid <> $1 ORDER BY credential_cid COLLATE "C"`, cid)
 	if err != nil {
 		return nil, fmt.Errorf("adtp/store/postgres: find descendants: %w", err)
 	}

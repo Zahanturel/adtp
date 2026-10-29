@@ -438,3 +438,44 @@ func TestPostgresKeyStoreList(t *testing.T) {
 		}
 	}
 }
+
+// TestPostgresKeyStoreListIsByteOrdered pins List() to byte order rather than
+// the database's collation. MemoryKeyStore.List sorts with sort.Strings, so
+// without an explicit COLLATE the two backends disagree on any pair of DIDs
+// whose first differing byte differs only in case: a linguistic collation such
+// as en_US.utf8 — the default in the postgres:16 image CI uses — folds case and
+// puts "...cgd" before "...HJS", while byte order puts 'H' (0x48) before
+// 'c' (0x63). TestPostgresKeyStoreList catches this only when the randomly
+// generated DIDs happen to differ in case at the deciding position, which is
+// why it passed on 2026-10-20 and failed on 2026-10-27. These DIDs are the
+// pair from that failure, so the disagreement is reproduced on every run.
+func TestPostgresKeyStoreListIsByteOrdered(t *testing.T) {
+	ks := testStore(t).Keys()
+	priv, _ := mustKey(t)
+
+	// Byte order: 'H' (0x48) < 'c' (0x63), so the "HJSF" DID sorts first.
+	// Collation order under en_US.utf8: the reverse.
+	const (
+		upper = "did:key:z6MkiHJSF3iQxXDGVjdtqjboyx8JtdsvwKGG9d7WhVWPvMjL"
+		lower = "did:key:z6MkicgdCQFiX64pd4K7G1HrE4CTv8KYHoAvd3aZnGD7XJvH"
+	)
+	// Stored in the order that is wrong for the assertion, so a store that
+	// simply echoed insertion order would fail too.
+	for _, did := range []string{lower, upper} {
+		if err := ks.Store(did, priv); err != nil {
+			t.Fatalf("Store(%s): %v", did, err)
+		}
+	}
+
+	want := []string{upper, lower}
+	got := ks.List()
+	if len(got) != len(want) {
+		t.Fatalf("List() returned %d DIDs, want %d", len(got), len(want))
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("List()[%d] = %q, want %q (must be byte order, not collation order)",
+				i, got[i], want[i])
+		}
+	}
+}

@@ -94,12 +94,16 @@ func (k *KeyStore) Delete(did string) error {
 	return nil
 }
 
-// List returns the stored DIDs in ascending order. A query failure yields nil;
-// the interface has no error return, and every caller treats the result as
+// List returns the stored DIDs in ascending byte order. The COLLATE "C" is
+// load-bearing: identity.MemoryKeyStore.List sorts with sort.Strings, so
+// without it a linguistic database collation (en_US.utf8, the default in the
+// postgres:16 image) would fold case and order mixed-case base58 DIDs
+// differently from the in-memory backend. A query failure yields nil; the
+// interface has no error return, and every caller treats the result as
 // advisory.
 func (k *KeyStore) List() []string {
 	rows, err := k.pool.Query(context.Background(),
-		`SELECT did FROM agent_keys ORDER BY did`)
+		`SELECT did FROM agent_keys ORDER BY did COLLATE "C"`)
 	if err != nil {
 		return nil
 	}
